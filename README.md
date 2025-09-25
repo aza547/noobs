@@ -11,7 +11,7 @@ Uses a [custom](https://github.com/aza547/warcraft-recorder-obs-studio) fork of 
 - Enable "replay_buffer to recording".
 - Allow libobs to be used as a library easier.
 
-Windows is the on ly suppoted platform.
+Windows is the only supported platform.
 
 ## Installation
 
