@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "node-gyp rebuild && node dist.js",
+    "test-errors": "ts-node --project test/tsconfig.json test/errors.ts",
+    "test-preview": "ts-node --project test/tsconfig.json test/preview.ts",
     "configure-cursor-anysphere": "node-gyp configure -- -f compile_commands_json && copy build\\Release\\compile_commands.json src\\compile_commands.json"
   },
   "files": [
@@ -24,7 +26,8 @@
   "license": "LGPL-2.0",
   "devDependencies": {
     "@types/node": "^24.1.0",
-    "node-gyp": "^11.2.0"
+    "node-gyp": "^11.2.0",
+    "ts-node": "^10.9.2"
   },
   "dependencies": {
     "node-addon-api": "^8.4.0"

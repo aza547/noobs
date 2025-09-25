@@ -1,4 +1,4 @@
-const noobs = require('../index.js');
+import noobs from '../index.js';
 const path = require('path');
 
 async function test() {
@@ -19,7 +19,7 @@ async function test() {
   // noobs.InitPreview(null); // Pass null for now, as we don't have a HWND yet.
   // noobs.ShowPreview(0, 0, 800, 600); // Show the preview at 800x600.
   const s = noobs.GetPreviewInfo();
-  console.log("info:", s);
+  console.log('info:', s);
 
   noobs.Shutdown();
   console.log('Test Done');

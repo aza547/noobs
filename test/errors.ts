@@ -1,11 +1,11 @@
-const noobs = require('../index.js');
+import noobs from '../index.js';
 const assert = require('assert');
 
 async function test() {
   let errMsg = '';
   try {
     noobs.GetSourceSettings('Test Source');
-  } catch (e) {
+  } catch (e: any) {
     errMsg = e.message;
   }
   assert.equal(errMsg, 'Obs not initialized');

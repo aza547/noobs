@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+      "esModuleInterop": true,
+      "noImplicitAny": true,
+      "noEmit": true,
+      "strict": true,
+    },
+    "include": ["*.ts", "../index.d.ts"]
+  }
+  
