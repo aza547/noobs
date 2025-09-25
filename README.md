@@ -11,6 +11,8 @@ Uses a [custom](https://github.com/aza547/warcraft-recorder-obs-studio) fork of 
 - Enable "replay_buffer to recording".
 - Allow libobs to be used as a library easier.
 
+Windows is the on ly suppoted platform.
+
 ## Installation
 
 ```bash
@@ -25,10 +27,9 @@ import noobs from 'noobs';
 
 const distPath = ...;
 const logPath = ...;
-const recordingPath = ...;
 const cb = (signal) => console.log(signal);
 
-noobs.Init(distPath, logPath, recordingPath, cb);
+noobs.Init(distPath, logPath, cb);
 ...
 noobs.Shutdown();
 ```
