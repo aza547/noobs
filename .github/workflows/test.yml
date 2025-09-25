@@ -19,5 +19,5 @@ jobs:
         run: npm run build
       - name: test/err
         run: npm run test-errors
-      - name: test/err
+      - name: test/preview
         run: npm run test-preview
