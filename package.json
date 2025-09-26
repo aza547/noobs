@@ -31,5 +31,9 @@
   },
   "dependencies": {
     "node-addon-api": "^8.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aza547/noobs.git"
   }
 }
