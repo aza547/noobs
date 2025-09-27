@@ -6,6 +6,9 @@
 
 ObsInterface* obs = nullptr;
 
+extern "C" __declspec(dllexport) DWORD NvOptimusEnablement = 1;
+extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+
 Napi::Value ObsInit(const Napi::CallbackInfo& info) {
   bool valid = info.Length() == 3 &&
    info[0].IsString() &&   // Dist path
