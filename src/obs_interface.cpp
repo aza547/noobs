@@ -695,7 +695,10 @@ void draw_callback(void* data, uint32_t cx, uint32_t cy) {
   gs_set_viewport(previewX, previewY, previewCX, previewCY);
 
   // Renders the scene now the graphics context is setup.
-  obs_render_main_texture();
+  // obs_render_main_texture();
+  obs_source_t *source = obs_scene_get_source(obsInterface->scene);
+  if (source)
+    obs_source_video_render(source);
 
   // Draw boxes around sources, if enabled.
   if (obsInterface->getDrawSourceOutlineEnabled()) {

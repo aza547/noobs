@@ -91,9 +91,10 @@ class ObsInterface {
     void sourceCallback(std::string name); // Send callback for source change.
     void zeroVolmeter(std::string name); // Zero the volmeter for a source.
 
+    obs_scene_t *scene = nullptr;
+
   private:
     obs_output_t *output = nullptr;
-    obs_scene_t *scene = nullptr;
 
     obs_encoder_t *video_encoder = nullptr;
     obs_encoder_t *audio_encoder = nullptr;
