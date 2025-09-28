@@ -767,7 +767,7 @@ void ObsInterface::initPreview(HWND parent) {
     }
 
     preview_hwnd = CreateWindowEx(
-      WS_EX_LAYERED,         
+      0,         
       TEXT("PreviewWindowClass"),   // Window class we already registered earlier
       TEXT("OBS Preview"),          // Window name 
       WS_POPUP,
