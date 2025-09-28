@@ -7,7 +7,6 @@
 #include <graphics/matrix4.h>
 #include <graphics/vec4.h>
 #include <util/platform.h>
-#include <Dwmapi.h>
 
 void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
   Napi::Object obj = Napi::Object::New(env);
@@ -15,7 +14,6 @@ void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
   obj.Set("type", Napi::String::New(env, sd->type));
   obj.Set("id", Napi::String::New(env, sd->id));
   obj.Set("code", Napi::Number::New(env, sd->code));
-  
 
   if (sd->value.has_value()) {
     obj.Set("value", Napi::Number::New(env, sd->value.value()));
@@ -758,14 +756,6 @@ void ObsInterface::initPreview(HWND parent) {
     // https://github.com/aza547/wow-recorder/issues/740
     blog(LOG_INFO, "Creating preview child window");
 
-    DWORD windowStyle = WS_EX_TRANSPARENT;
-    BOOL enabled = FALSE;
-    DwmIsCompositionEnabled(&enabled);
-
-    if (enabled) {
-      windowStyle |= WS_EX_COMPOSITED;
-    }
-
     preview_hwnd = CreateWindowEx(
       0,         
       TEXT("PreviewWindowClass"),   // Window class we already registered earlier
@@ -784,7 +774,6 @@ void ObsInterface::initPreview(HWND parent) {
       return;
     }
 
-    SetLayeredWindowAttributes(preview_hwnd, 0, 255, LWA_ALPHA);
     SetParent(preview_hwnd, parent);
 
     LONG_PTR style = GetWindowLongPtr(preview_hwnd, GWL_STYLE);
@@ -793,7 +782,7 @@ void ObsInterface::initPreview(HWND parent) {
     SetWindowLongPtr(preview_hwnd, GWL_STYLE, style);
 
     LONG_PTR exStyle = GetWindowLongPtr(preview_hwnd, GWL_EXSTYLE);
-    exStyle |= windowStyle;
+    exStyle |= WS_EX_TRANSPARENT;
     SetWindowLongPtr(preview_hwnd, GWL_EXSTYLE, exStyle);
   }
 

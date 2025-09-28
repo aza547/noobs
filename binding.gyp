@@ -14,7 +14,6 @@
         ],
         'libraries': [
             "../bin/64bit/obs.lib",
-            "dwmapi.lib",
         ],
         'dependencies': [
             "<!(node -p \"require('node-addon-api').gyp\")"
