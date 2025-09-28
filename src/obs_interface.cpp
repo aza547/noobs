@@ -221,6 +221,7 @@ void ObsInterface::init_obs(const std::string& distPath) {
   }
   
   obs_post_load_modules();
+  register_preview_window_class();
 
   list_encoders();
   list_source_types();

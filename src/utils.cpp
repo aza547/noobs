@@ -397,7 +397,7 @@ LRESULT CALLBACK DisplayWndProc(
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-void registerPreviewWindowClass() {
+void register_preview_window_class() {
   WNDCLASSEX klass;
   
   klass.cbSize = sizeof(WNDCLASSEX);
