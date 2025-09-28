@@ -7,6 +7,7 @@
 #include <graphics/matrix4.h>
 #include <graphics/vec4.h>
 #include <util/platform.h>
+#include <Dwmapi.h>
 
 void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
   Napi::Object obj = Napi::Object::New(env);
@@ -751,16 +752,27 @@ void ObsInterface::initPreview(HWND parent) {
   blog(LOG_INFO, "ObsInterface::initPreview");
 
   if (!preview_hwnd) {
+    // This stuff is basically lifted from OSN. I initially wrote it myself,
+    // but ran into a bunch of issues with HDR displays. See here:
+    // https://github.com/aza547/wow-recorder/issues/740
     blog(LOG_INFO, "Creating preview child window");
 
-    preview_hwnd = CreateWindowExA(
-      0,                      // No extended styles
-      "STATIC",               // Simple static control class (ANSI string)
-      "OBS Preview",          // Window name (ANSI string)
-      WS_CHILD | WS_BORDER,   // Child + border, NOT visible initially
+    DWORD windowStyle = WS_EX_TRANSPARENT;
+    BOOL enabled = FALSE;
+    DwmIsCompositionEnabled(&enabled);
+
+    if (enabled) {
+      windowStyle |= WS_EX_COMPOSITED;
+    }
+
+    preview_hwnd = CreateWindowEx(
+      WS_EX_LAYERED,         
+      TEXT("Win32DisplayClass"),    // Window class we already registered
+      TEXT("OBS Preview"),          // Window name 
+      WS_POPUP,
       0, 0,                   // Initial position (x, y)
       0, 0,                   // Initial size (width, height)
-      parent,                 // Parent window (your Electron app)
+      NULL,                   // No parent yet
       NULL,                   // No menu
       GetModuleHandle(NULL),
       NULL
@@ -770,6 +782,18 @@ void ObsInterface::initPreview(HWND parent) {
       blog(LOG_ERROR, "Failed to create preview child window");
       return;
     }
+
+    SetLayeredWindowAttributes(preview_hwnd, 0, 255, LWA_ALPHA);
+    SetParent(preview_hwnd, parent);
+
+    LONG_PTR style = GetWindowLongPtr(preview_hwnd, GWL_STYLE);
+    style &= ~WS_POPUP;
+    style |= WS_CHILD;
+    SetWindowLongPtr(preview_hwnd, GWL_STYLE, style);
+
+    LONG_PTR exStyle = GetWindowLongPtr(preview_hwnd, GWL_EXSTYLE);
+    exStyle |= windowStyle;
+    SetWindowLongPtr(preview_hwnd, GWL_EXSTYLE, exStyle);
   }
 
   if (!display) {
