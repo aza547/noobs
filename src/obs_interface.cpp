@@ -153,7 +153,7 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.range = VIDEO_RANGE_PARTIAL;
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
-  ovi.gpu_conversion = true;
+  ovi.gpu_conversion = false;
   ovi.graphics_module = "libobs-d3d11.dll"; 
 
   return obs_reset_video(&ovi);
