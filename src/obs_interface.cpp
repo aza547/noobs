@@ -768,7 +768,7 @@ void ObsInterface::initPreview(HWND parent) {
 
     preview_hwnd = CreateWindowEx(
       WS_EX_LAYERED,         
-      TEXT("Win32DisplayClass"),    // Window class we already registered
+      TEXT("PreviewWindowClass"),   // Window class we already registered earlier
       TEXT("OBS Preview"),          // Window name 
       WS_POPUP,
       0, 0,                   // Initial position (x, y)
@@ -825,8 +825,13 @@ void ObsInterface::initPreview(HWND parent) {
 void ObsInterface::configurePreview(int x, int y, int width, int height) {
   blog(LOG_INFO, "ObsInterface::configurePreview");
 
-  if (!preview_hwnd || !display) {
+  if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
+    return;
+  }
+
+  if (!display) {
+    blog(LOG_ERROR, "Preview display not initialized");
     return;
   }
 
@@ -853,8 +858,13 @@ void ObsInterface::configurePreview(int x, int y, int width, int height) {
 void ObsInterface::showPreview() {
   blog(LOG_INFO, "ObsInterface::showPreview");
 
-  if (!preview_hwnd || !display) {
+  if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
+    return;
+  }
+
+  if (!display) {
+    blog(LOG_ERROR, "Preview display not initialized");
     return;
   }
 
@@ -875,7 +885,7 @@ void ObsInterface::disablePreview() {
   blog(LOG_INFO, "ObsInterface::disablePreview");
 
   if (!display) {
-    blog(LOG_ERROR, "Preview window not initialized");
+    blog(LOG_ERROR, "Preview display not initialized");
     return;
   }
 
