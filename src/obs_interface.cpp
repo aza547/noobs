@@ -61,22 +61,6 @@ void ObsInterface::list_output_types()
   }
 }
 
-bool log_adapter(void *param, const char *node, uint32_t idx)
-{
-  blog(LOG_INFO, "  - %d: %s", idx, node);
-  return true;
-}
-
-void list_adapters()
-{
-  // Pretty sure OBS logs all this stuff anyway but do it ourselves for good measure.
-  obs_enter_graphics();
-  uint32_t count = gs_get_adapter_count();
-  blog(LOG_INFO, "Adapter count: %d", count);
-  gs_enum_adapters(log_adapter, NULL);
-  obs_leave_graphics();
-}
-
 void ObsInterface::load_module(const char* module, const char* data, bool allowFail) {
   blog(LOG_INFO, "Loading module: %s", module);
   blog(LOG_INFO, "Data path: %s", data);
@@ -153,7 +137,7 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.range = VIDEO_RANGE_PARTIAL;
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
-  ovi.gpu_conversion = false;
+  ovi.gpu_conversion = true;
   ovi.graphics_module = "libobs-d3d11.dll"; 
 
   return obs_reset_video(&ovi);
@@ -240,7 +224,6 @@ void ObsInterface::init_obs(const std::string& distPath) {
   list_encoders();
   list_source_types();
   list_output_types();
-  list_adapters();
 
   blog(LOG_INFO, "Initializing complete");
 }
