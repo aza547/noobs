@@ -149,8 +149,8 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.fps_den = 1;
 
   ovi.output_format = VIDEO_FORMAT_NV12;
-  ovi.colorspace = VIDEO_CS_DEFAULT;
-  ovi.range = VIDEO_RANGE_DEFAULT;
+  ovi.colorspace = VIDEO_CS_709;
+  ovi.range = VIDEO_RANGE_PARTIAL;
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
   ovi.gpu_conversion = true;
