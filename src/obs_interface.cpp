@@ -61,6 +61,22 @@ void ObsInterface::list_output_types()
   }
 }
 
+bool log_adapter(void *param, const char *node, uint32_t idx)
+{
+  blog(LOG_INFO, "  - %d: %s", idx, node);
+  return true;
+}
+
+void list_adapters()
+{
+  // Pretty sure OBS logs all this stuff anyway but do it ourselves for good measure.
+  obs_enter_graphics();
+  uint32_t count = gs_get_adapter_count();
+  blog(LOG_INFO, "Adapter count: %d", count);
+  gs_enum_adapters(log_adapter, NULL);
+  obs_leave_graphics();
+}
+
 void ObsInterface::load_module(const char* module, const char* data, bool allowFail) {
   blog(LOG_INFO, "Loading module: %s", module);
   blog(LOG_INFO, "Data path: %s", data);
@@ -151,7 +167,7 @@ bool ObsInterface::reset_audio() {
 }
 
 void ObsInterface::init_obs(const std::string& distPath) {
-  blog(LOG_INFO, "Enter init_obs");
+  blog(LOG_INFO, "Initializing OBS");
   auto success = obs_startup("en-US", NULL, NULL);
 
   if (!success) {
@@ -224,9 +240,11 @@ void ObsInterface::init_obs(const std::string& distPath) {
   list_encoders();
   list_source_types();
   list_output_types();
+  list_adapters();
 
-  blog(LOG_INFO, "Exit init_obs");
+  blog(LOG_INFO, "Initializing complete");
 }
+
 
 void ObsInterface::create_output() {
   blog(LOG_INFO, "Create outputs");
@@ -916,7 +934,7 @@ ObsInterface::ObsInterface(
 }
 
 ObsInterface::~ObsInterface() {
-  blog(LOG_DEBUG, "Destroying ObsInterface");
+  blog(LOG_DEBUG, "Shutting down");
 
   for (auto& kv : volmeters) {
     obs_volmeter_t* volmeter = kv.second;
@@ -989,6 +1007,8 @@ ObsInterface::~ObsInterface() {
     blog(LOG_DEBUG, "Releasing JavaScript callback");
     jscb.Release();
   }
+
+  blog(LOG_DEBUG, "Shutdown complete");
 }
 
 void ObsInterface::setBuffering(bool value) {
