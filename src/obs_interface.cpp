@@ -10,12 +10,18 @@
 
 void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
   Napi::Object obj = Napi::Object::New(env);
+
   obj.Set("type", Napi::String::New(env, sd->type));
   obj.Set("id", Napi::String::New(env, sd->id));
   obj.Set("code", Napi::Number::New(env, sd->code));
+  
 
   if (sd->value.has_value()) {
     obj.Set("value", Napi::Number::New(env, sd->value.value()));
+  }
+
+  if (sd->error.has_value()) {
+    obj.Set("error", Napi::String::New(env, sd->error.value()));
   }
 
   cb.Call({ obj });
@@ -571,11 +577,25 @@ obs_properties_t* ObsInterface::getSourceProperties(std::string name) {
 
 void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
   long long code = calldata_int(cd, "code");
+  const char *err = calldata_string(cd, "last_error");
+
+  std::optional<std::string> error;
+
+  if (err) {
+    error = std::string(err);
+  }
 
   SignalContext* ctx = static_cast<SignalContext*>(data);
   ObsInterface* self = ctx->self;
 
-  SignalData* sd = new SignalData{ "output", ctx->id.c_str(), code };
+  SignalData* sd = new SignalData{ 
+    "output", 
+    ctx->id.c_str(), 
+    code, 
+    std::nullopt, // No value, that's only used for volmeters.
+    error,
+  };
+
   self->jscb.NonBlockingCall(sd, call_jscb);
 }
 

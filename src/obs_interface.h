@@ -18,6 +18,7 @@ struct SignalData {
   std::string id;
   long long code;
   std::optional<float> value;
+  std::optional<std::string> error;
 };
 
 struct SignalContext {
