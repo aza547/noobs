@@ -751,9 +751,6 @@ void ObsInterface::initPreview(HWND parent) {
   blog(LOG_INFO, "ObsInterface::initPreview");
 
   if (!preview_hwnd) {
-    // This stuff is basically lifted from OSN. I initially wrote it myself,
-    // but ran into a bunch of issues with HDR displays. See here:
-    // https://github.com/aza547/wow-recorder/issues/740
     blog(LOG_INFO, "Creating preview child window");
 
     preview_hwnd = CreateWindowEx(
