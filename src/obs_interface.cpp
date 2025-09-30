@@ -774,7 +774,7 @@ void ObsInterface::initPreview(HWND parent) {
       return;
     }
 
-    // SetParent(preview_hwnd, parent);
+    SetParent(preview_hwnd, parent);
 
     LONG_PTR style = GetWindowLongPtr(preview_hwnd, GWL_STYLE);
     style &= ~WS_POPUP;
