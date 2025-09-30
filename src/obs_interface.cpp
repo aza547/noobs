@@ -119,7 +119,6 @@ void ObsInterface::setVideoContext(int fps, int width, int height) {
   create_video_encoders();
 }
 
-
 int ObsInterface::reset_video(int fps, int width, int height) {
   blog(LOG_INFO, "Reset video");
   obs_video_info ovi = {};
@@ -139,7 +138,14 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.gpu_conversion = true;
   ovi.graphics_module = "libobs-d3d11.dll"; 
 
-  return obs_reset_video(&ovi);
+  int rc = obs_reset_video(&ovi);
+
+  if (rc == OBS_VIDEO_SUCCESS) {
+    // Without this HDR doesn't work.
+    obs_set_video_levels(300.0f, 1000.0f); 
+  }
+
+  return rc;
 }
 
 bool ObsInterface::reset_audio() {
