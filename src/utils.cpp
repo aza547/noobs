@@ -22,7 +22,7 @@ void log_handler(int lvl, const char *msg, va_list args, void *p) {
         if (!log_dir.empty() && log_dir.back() != '\\' && log_dir.back() != '/')
             log_dir += '\\';
 
-        logFile.open(log_dir + filename.str(), std::ios::app);
+        //logFile.open(log_dir + filename.str(), std::ios::app);
         initialized = true;
     }
 
