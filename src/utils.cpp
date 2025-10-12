@@ -7,10 +7,10 @@
 #include "utils.h"
 #include <windows.h>
 
-static std::stringstream logFileName;
-static bool logInitialized = false;
-
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
+  static std::stringstream logFileName;
+  static bool logInitialized = false;
+  
   if (!logInitialized) {
     // Build the log filename.
     auto now = std::chrono::system_clock::now();
