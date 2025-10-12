@@ -1019,6 +1019,7 @@ ObsInterface::~ObsInterface() {
   }
 
   blog(LOG_DEBUG, "Shutdown complete");
+  close_log();
 }
 
 void ObsInterface::setBuffering(bool value) {

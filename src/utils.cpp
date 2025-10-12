@@ -7,57 +7,67 @@
 #include "utils.h"
 #include <windows.h>
 
+static std::ofstream logFile;
+static bool logInitialized = false;
+
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
-    static std::ofstream logFile;
-    static bool initialized = false;
-
-    if (!initialized) {
-        // Build log filename
-        auto now = std::chrono::system_clock::now();
-        auto t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream filename;
-        filename << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";
-
-        std::string log_dir = static_cast<const char*>(p);
-        if (!log_dir.empty() && log_dir.back() != '\\' && log_dir.back() != '/')
-            log_dir += '\\';
-
-        //logFile.open(log_dir + filename.str(), std::ios::app);
-        initialized = true;
-    }
-
-    if (!logFile.is_open()) return;
-
-    // Timestamp
+  if (!logInitialized) {
+    // Build log filename
     auto now = std::chrono::system_clock::now();
     auto t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                  now.time_since_epoch()) % 1000;
+    std::stringstream filename;
+    filename << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";
 
-    std::stringstream timestamp;
-    timestamp << "[" << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S")
-              << "." << std::setfill('0') << std::setw(3) << ms.count() << "] ";
+    std::string log_dir = static_cast<const char*>(p);
+    if (!log_dir.empty() && log_dir.back() != '\\' && log_dir.back() != '/')
+      log_dir += '\\';
 
-    // Log level
-    const char* level_str = "UNKNOWN";
-    switch (lvl) {
-        case LOG_ERROR:   level_str = "ERROR"; break;
-        case LOG_WARNING: level_str = "WARN";  break;
-        case LOG_INFO:    level_str = "INFO";  break;
-        case LOG_DEBUG:   level_str = "DEBUG"; break;
-    }
-    timestamp << "[" << level_str << "]  ";
+    logFile.open(log_dir + filename.str(), std::ios::app);
+    logInitialized = true;
+  }
 
-    // Format message
-    char buffer[4096];
-    vsnprintf(buffer, sizeof(buffer), msg, args);
+  if (!logFile.is_open()) return;
 
-    // Prepend timestamp and flush per line
-    std::istringstream iss(buffer);
-    std::string line;
-    while (std::getline(iss, line)) {
-        logFile << timestamp.str() << line << std::endl;  // std::endl flushes
-    }
+  // Timestamp
+  auto now = std::chrono::system_clock::now();
+  auto t = std::chrono::system_clock::to_time_t(now);
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now.time_since_epoch()) % 1000;
+
+  std::stringstream timestamp;
+  timestamp << "[" << std::put_time(std::localtime(&t), "%Y-%m-%d %H:%M:%S")
+            << "." << std::setfill('0') << std::setw(3) << ms.count() << "] ";
+
+  // Log level
+  const char* level_str = "UNKNOWN";
+  switch (lvl) {
+      case LOG_ERROR:   level_str = "ERROR"; break;
+      case LOG_WARNING: level_str = "WARN";  break;
+      case LOG_INFO:    level_str = "INFO";  break;
+      case LOG_DEBUG:   level_str = "DEBUG"; break;
+  }
+  timestamp << "[" << level_str << "]  ";
+
+  // Format message
+  char buffer[4096];
+  vsnprintf(buffer, sizeof(buffer), msg, args);
+
+  // Prepend timestamp and flush per line
+  std::istringstream iss(buffer);
+  std::string line;
+  
+  while (std::getline(iss, line)) {
+    logFile << timestamp.str() << line << std::endl;  // std::endl flushes
+  }
+}
+
+void close_log() {
+  if (logFile.is_open()) {
+    blog(LOG_INFO, "Closing log file");
+    logFile.close();
+    logInitialized = false;
+  }
+  blog(LOG_INFO, "Log open? %d", logFile.is_open());
 }
 
 Napi::Object data_to_napi(Napi::Env env, obs_data_t* data) {
