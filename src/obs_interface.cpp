@@ -66,10 +66,10 @@ void ObsInterface::load_module(const char* module, const char* data, bool allowF
   blog(LOG_INFO, "Allow fail: %d", allowFail);
 
   obs_module_t *ptr = NULL;
-  int success = obs_open_module(&ptr, module, data);
+  int openmod = obs_open_module(&ptr, module, data);
 
-  if (success != MODULE_SUCCESS) {
-    blog(LOG_ERROR, "Failed to open module: %s", module);
+  if (openmod != MODULE_SUCCESS) {
+    blog(LOG_ERROR, "Failed to open module: %s, %d", module, openmod);
     throw std::runtime_error("Failed to open module!");
   }
 
