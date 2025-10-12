@@ -7,26 +7,24 @@
 #include "utils.h"
 #include <windows.h>
 
-static std::ofstream logFile;
+static std::stringstream logFileName;
 static bool logInitialized = false;
 
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
   if (!logInitialized) {
-    // Build log filename
+    // Build the log filename.
     auto now = std::chrono::system_clock::now();
     auto t = std::chrono::system_clock::to_time_t(now);
-    std::stringstream filename;
-    filename << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";
 
-    std::string log_dir = static_cast<const char*>(p);
-    if (!log_dir.empty() && log_dir.back() != '\\' && log_dir.back() != '/')
-      log_dir += '\\';
+    std::string logDir = static_cast<const char*>(p);
 
-    logFile.open(log_dir + filename.str(), std::ios::app);
+    if (!logDir.empty() && logDir.back() != '\\' && logDir.back() != '/') {
+      logDir += '\\';
+    }
+      
+    logFileName << logDir << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";
     logInitialized = true;
   }
-
-  if (!logFile.is_open()) return;
 
   // Timestamp
   auto now = std::chrono::system_clock::now();
@@ -55,19 +53,11 @@ void log_handler(int lvl, const char *msg, va_list args, void *p) {
   // Prepend timestamp and flush per line
   std::istringstream iss(buffer);
   std::string line;
-  
-  while (std::getline(iss, line)) {
+  std::ofstream logFile(logFileName.str(), std::ios::app);
+
+  while (logFile.is_open() && std::getline(iss, line)) {
     logFile << timestamp.str() << line << std::endl;  // std::endl flushes
   }
-}
-
-void close_log() {
-  if (logFile.is_open()) {
-    blog(LOG_INFO, "Closing log file");
-    logFile.close();
-    logInitialized = false;
-  }
-  blog(LOG_INFO, "Log open? %d", logFile.is_open());
 }
 
 Napi::Object data_to_napi(Napi::Env env, obs_data_t* data) {
