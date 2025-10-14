@@ -1,11 +1,29 @@
 const noobs = require('../index.js');
 const path = require('path');
 
+process.on('uncaughtException', (err) => {
+  console.log('Uncaught exception:', err);
+});
+
+const someGlobalState = {
+  shouldRebuffer: false,
+};
+
+o = console.log;
+console.log = (...args) => {
+  o(`[${new Date().toISOString()}] ` + args[0], args[1]);
+};
+
 async function test() {
   console.log('Starting obs...');
 
   const cb = (msg) => {
     console.log('Callback received:', msg);
+    if (someGlobalState.shouldRebuffer && msg.id === 'deactivate') {
+      console.log('Starting buffer.');
+      noobs.StartBuffer();
+      someGlobalState.shouldRebuffer = false;
+    }
   };
 
   const distPath = path.resolve(__dirname, '../dist');
@@ -35,17 +53,19 @@ async function test() {
   console.log('Source properties:', properties);
   console.log('Source properties:', properties[0].items);
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   const recordingNames = new Set();
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 1; i++) {
     console.log('Test Recording Loop:', i + 1);
 
     // Start the buffer.
+    console.log('Starting buffer.');
     noobs.StartBuffer();
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     // Start the recording, with 1s offset into the past.
+    console.log('Starting recording.');
     noobs.StartRecording(1);
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
@@ -59,9 +79,16 @@ async function test() {
     noobs.RemoveSourceFromScene('Test Source');
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    someGlobalState.shouldRebuffer = true;
     // Stop the recording.
+    console.log('Stopping recording.');
     noobs.StopRecording();
     await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    console.log('Starting recording.');
+    noobs.StartRecording(0);
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    noobs.StopRecording();
 
     // Get the path to the last recording.
     const last = noobs.GetLastRecording();
