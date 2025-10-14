@@ -612,6 +612,8 @@ void ObsInterface::connect_signal_handlers(obs_output_t *output) {
   signal_handler_connect(sh, "starting", output_signal_handler,  starting_ctx);
   signal_handler_connect(sh, "stopping", output_signal_handler,  stopping_ctx);
   signal_handler_connect(sh, "stop", output_signal_handler,  stop_ctx);
+  signal_handler_connect(sh, "activate", output_signal_handler, activate_ctx);
+  signal_handler_connect(sh, "deactivate", output_signal_handler, deactivate_ctx);
 }
 
 void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
@@ -620,6 +622,8 @@ void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
   signal_handler_disconnect(sh, "start", output_signal_handler,  start_ctx);
   signal_handler_disconnect(sh, "stopping", output_signal_handler,  stopping_ctx);
   signal_handler_disconnect(sh, "stop", output_signal_handler,  stop_ctx);
+  signal_handler_disconnect(sh, "activate", output_signal_handler, activate_ctx);
+  signal_handler_disconnect(sh, "deactivate ", output_signal_handler, deactivate_ctx);
 }
 
 bool draw_source_outline(obs_scene_t *scene, obs_sceneitem_t *item, void *p) {
@@ -935,6 +939,8 @@ ObsInterface::ObsInterface(
   start_ctx = new SignalContext{ this, "start" };
   stopping_ctx = new SignalContext{ this, "stopping" };
   stop_ctx = new SignalContext{ this, "stop" };
+  activate_ctx = new SignalContext{this, "activate"};
+  deactivate_ctx = new SignalContext{this, "deactivate"};
 
   // Create the resources we rely on.
   create_scene();
@@ -965,6 +971,8 @@ ObsInterface::~ObsInterface() {
   delete start_ctx;
   delete stopping_ctx;
   delete stop_ctx;
+  delete activate_ctx;
+  delete deactivate_ctx;
 
   for (auto& kv : sources) {
     std::string name = kv.first;

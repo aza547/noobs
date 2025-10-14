@@ -119,6 +119,8 @@ class ObsInterface {
     SignalContext* start_ctx;
     SignalContext* stopping_ctx;
     SignalContext* stop_ctx;
+    SignalContext* activate_ctx;
+    SignalContext* deactivate_ctx;
     static void output_signal_handler(void *data, calldata_t *cd);
 
     void list_encoders(obs_encoder_type type = OBS_ENCODER_VIDEO);
