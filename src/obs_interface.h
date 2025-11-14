@@ -52,7 +52,7 @@ class ObsInterface {
     void forceStopRecording(); // Force stop the recording, this will not save the current recording.
     std::string getLastRecording(); // Get the last recorded file path.
     void setBuffering(bool buffer); // Enable or disable buffering.
-    void setRecordingDir(const std::string& recordingPath); // Set the recording path.
+    void setRecordingCfg(const std::string& recordingPath, const std::string& fileExtension); // Set the recording path.
     void setVideoContext(int fps, int width, int height); // Reset video settings.
 
     std::string createSource(std::string name, std::string type); // Create a new source, returns the name of the source which can vary from the requested.
@@ -105,6 +105,7 @@ class ObsInterface {
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";
+    std::string file_extension = "mp4"; // File extension for recordings.
 
     bool buffering = false; // Whether we are buffering the recording in memory.
     bool drawSourceOutline = false; // Draw red outline around source

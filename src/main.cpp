@@ -37,22 +37,34 @@ Napi::Value ObsShutdown(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
-Napi::Value ObsSetRecordingDir(const Napi::CallbackInfo& info) {
+Napi::Value ObsSetRecordingCfg(const Napi::CallbackInfo& info) {
   if (!obs) {
-    blog(LOG_ERROR, "ObsSetRecordingDir called but obs is not initialized");
+    blog(LOG_ERROR, "ObsSetRecordingCfg called but obs is not initialized");
     Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
 
-  bool valid = info.Length() == 1 && info[0].IsString();
+  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
 
   if (!valid) {
-    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetRecordingDir").ThrowAsJavaScriptException();
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetRecordingCfg").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
 
   std::string recordingPath = info[0].As<Napi::String>().Utf8Value();
-  obs->setRecordingDir(recordingPath);
+  int fileExt = info[1].As<Napi::Number>().Int32Value();
+  std::string fileExtension;
+
+  if (fileExt == 0) {
+    fileExtension = "mp4";
+  } else if (fileExt == 1) {
+    fileExtension = "mkv";
+  } else {
+    Napi::TypeError::New(info.Env(), "Invalid file extension value").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+  
+  obs->setRecordingCfg(recordingPath, fileExtension);
   return info.Env().Undefined();
 }
 
@@ -665,7 +677,7 @@ Napi::Value ObsGetDrawSourceOutlineEnabled(const Napi::CallbackInfo& info) {
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("Init", Napi::Function::New(env, ObsInit));
   exports.Set("Shutdown", Napi::Function::New(env, ObsShutdown));
-  exports.Set("SetRecordingDir", Napi::Function::New(env, ObsSetRecordingDir));
+  exports.Set("SetRecordingCfg", Napi::Function::New(env, ObsSetRecordingCfg));
   exports.Set("ResetVideoContext", Napi::Function::New(env, ObsResetVideoContext));
   exports.Set("ListVideoEncoders", Napi::Function::New(env, ObsListVideoEncoders));
   exports.Set("SetVideoEncoder", Napi::Function::New(env, ObsSetVideoEncoder));

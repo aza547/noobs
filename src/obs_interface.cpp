@@ -262,11 +262,11 @@ void ObsInterface::create_output() {
     obs_data_set_int(settings, "max_size_mb", 1024);
     obs_data_set_string(settings, "directory", recording_path.c_str());
     obs_data_set_string(settings, "format", "%CCYY-%MM-%DD %hh-%mm-%ss");
-    obs_data_set_string(settings, "extension", "mp4");
+    obs_data_set_string(settings, "extension", file_extension.c_str());
   } else {
     blog(LOG_INFO, "Set ffmpeg_muxer settings");
     // Need to specify the exact path for ffmpeg_muxer. We will write this again at start recording.
-    std::string filename = recording_path + "\\" + get_current_date_time() + ".mp4";
+    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
     obs_data_set_string(settings, "path", filename.c_str());
     unbuffered_output_filename = filename;
   }
@@ -276,8 +276,14 @@ void ObsInterface::create_output() {
   connect_signal_handlers(output);
 }
 
-void ObsInterface::setRecordingDir(const std::string& recordingPath) {
-  blog(LOG_INFO, "Set recording directory. Path: %s", recordingPath.c_str());
+void ObsInterface::setRecordingCfg(
+  const std::string& recordingPath, 
+  const std::string& fileExtension
+) {
+  blog(LOG_INFO, "Set recording config. Path: %s. Ext %s", 
+    recordingPath.c_str(), 
+    fileExtension.c_str()
+  );
 
   if (obs_output_active(output)) {
     blog(LOG_ERROR, "Output is active, cannot update recording path");
@@ -285,11 +291,13 @@ void ObsInterface::setRecordingDir(const std::string& recordingPath) {
   }
 
   recording_path = recordingPath;
+  file_extension = fileExtension;
   create_output();
 
   create_video_encoders();
   create_audio_encoders();
 }
+
 
 void ObsInterface::create_video_encoders() {
   blog(LOG_INFO, "Set video encoder: %s", video_encoder_id.c_str());
@@ -1099,7 +1107,7 @@ void ObsInterface::startRecording(int offset) {
     }
   } else {
     obs_data_t *ffmpeg_settings = obs_data_create();
-    std::string filename = recording_path + "\\" + get_current_date_time() + ".mp4";
+    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
     obs_data_set_string(ffmpeg_settings,  "path", filename.c_str());
     obs_output_update(output, ffmpeg_settings);
     obs_data_release(ffmpeg_settings);

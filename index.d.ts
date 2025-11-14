@@ -158,6 +158,11 @@ export type SourceDimensions = {
   width: number; // Width in pixels, before scaling
 };
 
+export enum FileExtension {
+  MP4,
+  MKV,
+}
+
 interface Noobs {
   Init(
     distPath: string,
@@ -174,7 +179,7 @@ interface Noobs {
   StopRecording(): void;
   ForceStopRecording(): void;
   GetLastRecording(): string;
-  SetRecordingDir(recordingPath: string): void;
+  SetRecordingCfg(recordingPath: string, fileExtension: FileExtension): void;
   ResetVideoContext(fps: number, width: number, height: number): void;
 
   // Encoder functions.
