@@ -17,7 +17,7 @@ async function test() {
   console.log('Recording path:', recordingPath);
 
   noobs.Init(distPath, logPath, cb);
-  noobs.SetRecordingDir(recordingPath);
+  noobs.SetRecordingCfg(recordingPath, 0);
 
   console.log('Stopping obs...');
   noobs.Shutdown();

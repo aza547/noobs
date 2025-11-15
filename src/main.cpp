@@ -54,7 +54,7 @@ Napi::Value ObsSetRecordingCfg(const Napi::CallbackInfo& info) {
   std::string recordingPath = info[0].As<Napi::String>().Utf8Value();
   int fileExt = info[1].As<Napi::Number>().Int32Value();
   std::string fileExtension;
-
+  
   if (fileExt == 0) {
     fileExtension = "mp4";
   } else if (fileExt == 1) {
