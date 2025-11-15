@@ -158,10 +158,7 @@ export type SourceDimensions = {
   width: number; // Width in pixels, before scaling
 };
 
-export enum FileExtension {
-  MP4,
-  MKV,
-}
+export type FileExtension = 'mp4' | 'mkv';
 
 interface Noobs {
   Init(

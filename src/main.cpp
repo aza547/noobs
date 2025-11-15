@@ -44,7 +44,7 @@ Napi::Value ObsSetRecordingCfg(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
   }
 
-  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
+  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsString();
 
   if (!valid) {
     Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetRecordingCfg").ThrowAsJavaScriptException();
@@ -52,14 +52,9 @@ Napi::Value ObsSetRecordingCfg(const Napi::CallbackInfo& info) {
   }
 
   std::string recordingPath = info[0].As<Napi::String>().Utf8Value();
-  int fileExt = info[1].As<Napi::Number>().Int32Value();
-  std::string fileExtension;
-  
-  if (fileExt == 0) {
-    fileExtension = "mp4";
-  } else if (fileExt == 1) {
-    fileExtension = "mkv";
-  } else {
+  std::string fileExtension = info[1].As<Napi::String>().Utf8Value();
+
+  if (fileExtension != "mp4" && fileExtension != "mkv") {
     Napi::TypeError::New(info.Env(), "Invalid file extension value").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
