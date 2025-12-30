@@ -327,10 +327,6 @@ void ObsInterface::create_video_encoders() {
 void ObsInterface::create_audio_encoders() {
   blog(LOG_INFO, "Create audio encoders");
 
-  // blog(LOG_INFO, "PRE  output mixers to all tracks %d", (int)obs_output_get_mixers(output));
-  // obs_output_set_mixers(output, 0x3F); // bits 0–5 → tracks 1–6
-  // blog(LOG_INFO, "POST output mixers to all tracks %d", (int)obs_output_get_mixers(output));
-
   for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
     if (audio_encoders[i]) {
       blog(LOG_DEBUG, "Releasing audio encoder");
@@ -339,7 +335,7 @@ void ObsInterface::create_audio_encoders() {
     }
 
     std::string name = "noobs_audio_encoder_" + std::to_string(i);
-    audio_encoders[i] = obs_audio_encoder_create("ffmpeg_aac", name.c_str(), NULL, 0, NULL);
+    audio_encoders[i] = obs_audio_encoder_create("ffmpeg_aac", name.c_str(), NULL, i, NULL);
 
     if (!audio_encoders[i]) {
       blog(LOG_ERROR, "Failed to create audio encoder!");
