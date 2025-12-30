@@ -196,6 +196,8 @@ interface Noobs {
   SetVolmeterEnabled(enabled: boolean): void; // Enable or disable the volume meter.
   SetAudioSuppression(enabled: boolean): void; // Enable or disable audio suppression (noise gate).
   SetForceMono(enabled: boolean): void; // Enable or disable the force mono audio setting.
+  GetAudioMixer(name: string): number; // Get the track for the audio source (1-6 as a bitmask).
+  SetAudioMixer(name: string, mixers: number): void; // Set the track for the audio source (1-6 as a bitmask).
 
   // Scene management functions.
   AddSourceToScene(sourceName: string): void;

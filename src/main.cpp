@@ -539,6 +539,45 @@ Napi::Value ObsSetForceMono(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+Napi::Value GetAudioMixer(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "GetAudioMixer called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool valid = info.Length() == 1 && info[0].IsString();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to GetAudioMixer").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  uint32_t mixer = obs->getAudioMixer(name);
+  return Napi::Number::New(info.Env(), mixer);
+}
+
+Napi::Value SetAudioMixer(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "GetAudioMixer called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to GetAudioMixer").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  uint32_t mixer = info[1].As<Napi::Number>().Uint32Value();
+  obs->setAudioMixer(name, mixer);
+  return info.Env().Undefined();
+}
+
 Napi::Value ObsAddSourceToScene(const Napi::CallbackInfo& info) {
   if (!obs) {
     blog(LOG_ERROR, "ObsAddSourceToScene called but obs is not initialized");
@@ -694,6 +733,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("SetVolmeterEnabled", Napi::Function::New(env, ObsSetVolmeterEnabled));
   exports.Set("SetAudioSuppression", Napi::Function::New(env, ObsSetAudioSuppression));
   exports.Set("SetForceMono", Napi::Function::New(env, ObsSetForceMono));
+  exports.Set("GetAudioMixer", Napi::Function::New(env, GetAudioMixer));
+  exports.Set("SetAudioMixer", Napi::Function::New(env, SetAudioMixer));
 
   exports.Set("AddSourceToScene", Napi::Function::New(env, ObsAddSourceToScene));
   exports.Set("RemoveSourceFromScene", Napi::Function::New(env, ObsRemoveSourceFromScene));

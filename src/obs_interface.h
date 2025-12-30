@@ -65,6 +65,8 @@ class ObsInterface {
     void setVolmeterEnabled(bool enabled); // Enable volmeters.
     void setAudioSuppression(bool enabled); // Enable audio suppression.
     void setForceMono(bool enabled); // Enable force mono audio.
+    uint32_t getAudioMixer(std::string name); // Get the track for the audio source (1-6 as a bitmask).
+    void setAudioMixer(std::string name, uint32_t mixers); // Set the track for the audio source (1-6 as a bitmask).
 
     void addSourceToScene(std::string name); // Add source to scene.
     void removeSourceFromScene(std::string name); // Remove source from scene.
@@ -98,7 +100,7 @@ class ObsInterface {
     obs_output_t *output = nullptr;
 
     obs_encoder_t *video_encoder = nullptr;
-    obs_encoder_t *audio_encoder = nullptr;
+    obs_encoder_t *audio_encoders[6] = { nullptr };
     
     obs_display_t *display = nullptr;
     HWND preview_hwnd = nullptr; // window handle for scene preview
