@@ -463,6 +463,12 @@ std::string ObsInterface::createSource(std::string name, std::string type) {
   uint32_t h = obs_source_get_height(source);
   sizes[real_name] = { w, h };
 
+  if (type == AUDIO_OUTPUT || type == AUDIO_INPUT || type == AUDIO_PROCESS) {
+    blog(LOG_INFO, "Assigning audio source %s to track %d", name.c_str(), audio_source_count + 1);
+    obs_set_output_source(audio_source_count + 1, source); // 1 = audio track
+    audio_source_count++;
+  }
+
   return real_name;
 }
 

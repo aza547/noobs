@@ -101,6 +101,7 @@ class ObsInterface {
 
     obs_encoder_t *video_encoder = nullptr;
     obs_encoder_t *audio_encoders[6] = { nullptr };
+    int audio_source_count = 0;
     
     obs_display_t *display = nullptr;
     HWND preview_hwnd = nullptr; // window handle for scene preview
