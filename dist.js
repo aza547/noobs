@@ -20,7 +20,7 @@ const addonDest = path.join(distRoot, packageName);
 fs.copyFileSync(addonSrc, addonDest);
 
 // Now copy the .dll files we need.
-const binSrc = path.resolve(__dirname, 'bin', '64bit');
+const binSrc = path.resolve(__dirname, 'bin', 'bin', 'win64');
 const binDst = path.resolve(__dirname, 'dist', 'bin');
 
 fs.readdirSync(binSrc)
@@ -40,14 +40,14 @@ const exeFiles = [
 ];
 
 exeFiles.forEach((file) => {
-  const srcPath = path.resolve(__dirname, 'bin', '64bit', file);
+  const srcPath = path.resolve(__dirname, 'bin', 'bin', 'win64', file);
   const destPath = path.resolve(__dirname, 'dist', 'bin', file);
   fs.copyFileSync(srcPath, destPath);
 });
 
 // Copy plugins themselves.
-const pluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins');
-const pluginDst = path.resolve(__dirname, 'dist', 'obs-plugins');
+const pluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins', 'win64');
+const pluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', 'win64');
 
 fs.cpSync(pluginSrc, pluginDst, { 
   recursive: true ,  

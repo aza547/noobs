@@ -13,7 +13,7 @@
             "include"
         ],
         'libraries': [
-            "../bin/64bit/obs.lib",
+            "../bin/bin/win64/obs.lib",
         ],
         'dependencies': [
             "<!(node -p \"require('node-addon-api').gyp\")"

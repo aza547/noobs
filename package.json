@@ -17,7 +17,7 @@
     "index.js",
     "index.d.ts",
     "binding.gyp",
-    "bin/64bit/obs.lib",
+    "bin/bin/win64/obs.lib",
     "src/**/*",
     "include/**/*",
     "dist/**/*"

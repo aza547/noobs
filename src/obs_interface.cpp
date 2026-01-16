@@ -177,7 +177,7 @@ void ObsInterface::init_obs(const std::string& distPath) {
   }
 
   std::string effectsPath = basePath + "data/effects/";
-  std::string pluginPath = basePath + "obs-plugins/";
+  std::string pluginPath = basePath + "obs-plugins/win64/";
   std::string pluginDataPath = basePath + "data/obs-plugins/";
 
   blog(LOG_INFO, "Base path: %s", basePath.c_str());
