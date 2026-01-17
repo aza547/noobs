@@ -184,7 +184,7 @@ interface Noobs {
   SetVideoEncoder(id: string, settings: ObsData): void; // Create the video encoder to use.
 
   // Source management functions.
-  CreateSource(name: string, type: string): string; // Returns the name of the source, which may vary in the event of a name conflict.
+  CreateSource(name: string, type: string, settings?: ObsData): string; // Returns the name of the source, which may vary in the event of a name conflict.
   DeleteSource(name: string): void;
   GetSourceSettings(name: string): ObsData;
   SetSourceSettings(name: string, settings: ObsData): void;
@@ -200,6 +200,9 @@ interface Noobs {
   // Scene management functions.
   AddSourceToScene(sourceName: string): void;
   RemoveSourceFromScene(sourceName: string): void;
+  // TODO: BEGIN TEMPORARY CODE TO TEST PIPEWIRE
+  ShowSource(name: string): void; // Show a source (activates PipeWire streams).
+  // TODO: END TEMPORARY CODE TO TEST PIPEWIRE
   GetSourcePos(name: string): SceneItemPosition & SourceDimensions;
   SetSourcePos(name: string, pos: SceneItemPosition): void;
 

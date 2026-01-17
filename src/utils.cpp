@@ -1,11 +1,18 @@
 #include <iostream>
 #include <obs.h>
 #include <fstream>
+// TODO: [linux-port] for filesystem paths 
+#include <filesystem>
+// TODO: [linux-port] END
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 #include "utils.h"
-#include <windows.h>
+#include "win_compat.h"
+#if defined(__linux__)
+#include <X11/Xlib.h>
+#include <X11/extensions/shape.h>
+#endif
 
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
   static std::stringstream logFileName;
@@ -19,7 +26,9 @@ void log_handler(int lvl, const char *msg, va_list args, void *p) {
     std::string logDir = static_cast<const char*>(p);
 
     if (!logDir.empty() && logDir.back() != '\\' && logDir.back() != '/') {
-      logDir += '\\';
+      // TODO: [linux-port] use platform filesystem path
+      logDir += std::filesystem::path::preferred_separator;
+      // TODO: [linux-port] END
     }
       
     logFileName << logDir << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";
@@ -383,6 +392,7 @@ std::string get_current_date_time() {
     return ss.str();
 }
 
+#ifdef _WIN32
 LRESULT CALLBACK DisplayWndProc(
   _In_ HWND hwnd, 
   _In_ UINT uMsg, 
@@ -396,7 +406,22 @@ LRESULT CALLBACK DisplayWndProc(
 
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
+#elif defined(__linux__)
+void make_window_click_through(Display* display, Window window) {
+    // Create an empty region
+    XRectangle rect;
+    rect.x = 0;
+    rect.y = 0;
+    rect.width = 0;
+    rect.height = 0;
+    
+    // Set the input shape to empty, making the window click-through
+    XShapeCombineRectangles(display, window, ShapeInput, 0, 0, &rect, 0, ShapeSet, 0);
+}
+#endif
 
+
+#ifdef _WIN32
 void register_preview_window_class() {
   WNDCLASSEX klass;
   
@@ -420,3 +445,4 @@ void register_preview_window_class() {
 
   blog(LOG_INFO, "Registered preview window class");
 }
+#endif

@@ -17,6 +17,21 @@
       "cStandard": "c17",
       "cppStandard": "c++17",
       "intelliSenseMode": "windows-msvc-x64"
+    },
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/include/**",
+        "${workspaceFolder}/node_modules/**",
+        "/home/adam/code/wcr-dirs/obs-studio/dist/artifacts/include/obs",
+        "/home/adam/code/wcr-dirs/obs-studio/dist/artifacts/include"
+      ],
+      "defines": [],
+      "compilerPath": "/usr/bin/g++",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "linux-clang-x64"
     }
   ],
   "version": 4
