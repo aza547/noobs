@@ -1,10 +1,15 @@
-#include <cstdint>
-#include <napi.h>
-#include "obs-data.h"
-#include "win_compat.h"
-#include <obs.h>
+// project
 #include "obs_interface.h"
 #include "utils.h"
+
+// vended headers/lib
+#include <napi.h>
+#include <obs.h>
+#include <obs-data.h>
+
+// std
+#include <algorithm>
+#include <cstdint>
 
 ObsInterface* obs = nullptr;
 
@@ -605,6 +610,30 @@ Napi::Value ObsRemoveSourceFromScene(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+Napi::Value ObsSetSceneItemOrder(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsSetSceneItemOrder called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetSceneItemOrder").ThrowAsJavaScriptException();
+    return info.Env().Undefined();  
+  }
+
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  int movement_int = info[1].As<Napi::Number>().Int32Value();
+  
+  // Cast to obs_order_movement enum
+  obs_order_movement movement = static_cast<obs_order_movement>(movement_int);
+  
+  obs->setSceneItemOrder(name, movement);
+  return info.Env().Undefined();
+}
+
 Napi::Value ObsGetSourcePos(const Napi::CallbackInfo& info) {
   if (!obs) {
     blog(LOG_ERROR, "ObsGetSourcePos called but obs is not initialized");
@@ -724,6 +753,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
   exports.Set("AddSourceToScene", Napi::Function::New(env, ObsAddSourceToScene));
   exports.Set("RemoveSourceFromScene", Napi::Function::New(env, ObsRemoveSourceFromScene));
+  exports.Set("SetSceneItemOrder", Napi::Function::New(env, ObsSetSceneItemOrder));
   exports.Set("GetSourcePos", Napi::Function::New(env, ObsGetSourcePos));
   exports.Set("SetSourcePos", Napi::Function::New(env, ObsSetSourcePos));
 

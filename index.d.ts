@@ -200,9 +200,7 @@ interface Noobs {
   // Scene management functions.
   AddSourceToScene(sourceName: string): void;
   RemoveSourceFromScene(sourceName: string): void;
-  // TODO: BEGIN TEMPORARY CODE TO TEST PIPEWIRE
-  ShowSource(name: string): void; // Show a source (activates PipeWire streams).
-  // TODO: END TEMPORARY CODE TO TEST PIPEWIRE
+  SetSceneItemOrder(sourceName: string, movement: number): void; // Set the z-order of a scene item (0=up, 1=down, 2=top, 3=bottom).
   GetSourcePos(name: string): SceneItemPosition & SourceDimensions;
   SetSourcePos(name: string, pos: SceneItemPosition): void;
 

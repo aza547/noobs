@@ -1,17 +1,28 @@
 #pragma once
 
-#include <cstdint>
+// vended headers/libraries
 #include <obs.h>
 #include <napi.h>
-#include "obs-data.h"
-#include "win_compat.h"
-#include <map>
-#include <string>
-#include <optional>
-#if defined(__linux__)
+#include <obs-data.h>
+
+// platform system libs
+#ifdef _WIN32
+  #ifndef NOMINMAX
+    #define NOMINMAX // using std
+  #endif
+  #include <windows.h>
+#elif defined(__linux__)
   #include <X11/Xlib.h>
   #include <X11/Xutil.h>
 #endif
+
+// std
+#include <atomic>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <string>
+
 
 // TODO [linux-port]: Linux audio sources
 #ifdef _WIN32
@@ -59,6 +70,10 @@ class ObsInterface {
 
     ~ObsInterface();
 
+    bool is_shutting_down() const noexcept {
+      return shutting_down.load(std::memory_order_relaxed);
+    }
+
     void startBuffering(); // Start buffering to memory.
     void startRecording(int offset); // Convert the active buffered recording to a real one.
     void stopRecording(); // Stop the recording.
@@ -81,6 +96,7 @@ class ObsInterface {
 
     void addSourceToScene(std::string name); // Add source to scene.
     void removeSourceFromScene(std::string name); // Remove source from scene.
+    void setSceneItemOrder(std::string name, obs_order_movement movement); // Set the z-order of a scene item.
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
@@ -108,6 +124,7 @@ class ObsInterface {
     obs_scene_t *scene = nullptr;
 
   private:
+    std::atomic<bool> shutting_down{false};;
     obs_output_t *output = nullptr;
 
     obs_encoder_t *video_encoder = nullptr;

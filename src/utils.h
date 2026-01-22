@@ -1,7 +1,10 @@
 #pragma once
 
+// vended headers/libraries
 #include <napi.h>
 #include <obs.h>
+
+// platform system libs
 #if defined(__linux__)
 #include <X11/Xlib.h>
 #include <X11/extensions/shape.h>
