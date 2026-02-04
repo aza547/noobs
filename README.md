@@ -11,7 +11,7 @@ Uses a [custom](https://github.com/aza547/warcraft-recorder-obs-studio) fork of 
 - Enable "replay_buffer to recording".
 - Allow libobs to be used as a library easier.
 
-Windows is the only supported platform.
+Windows and Linux are supported.
 
 ## Installation
 
@@ -87,10 +87,33 @@ TODO
 
 ## Building from Source
 
+### Windows
+
 ```bash
 npm install       # install deps
 npm run build     # compile it
+```
 
+### Linux
+
+Requires X11 development headers:
+
+```bash
+# Arch/CachyOS
+sudo pacman -S libx11 libxext
+
+# Fedora/Bazzite
+sudo dnf install libX11-devel libXext-devel
+
+npm install       # install deps
+npm run build     # compile it
+```
+
+The pre-built OBS libraries are included in `bin/native/linux/`.
+
+### Publishing
+
+```bash
 npm version patch # version bump
 npm pack          # build tgz locally
 npm publish       # publish to npm

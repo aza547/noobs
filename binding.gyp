@@ -19,16 +19,16 @@
         'conditions': [
             ['OS=="win"', {
                 'libraries': [
-                    "../bin/bin/win64/obs.lib",
+                    "../bin/native/win64/obs.lib",
                 ],
             }],
             ['OS=="linux"', {
                 'libraries': [
-                    "-L<(module_root_dir)/bin/bin/linux",
+                    "-L<(module_root_dir)/bin/native/linux",
                     "-lobs",
                 ],
                 'ldflags': [
-                    "-Wl,-rpath,'$$ORIGIN/../bin/bin/linux'",
+                    "-Wl,-rpath,'$$ORIGIN/../bin/native/linux'",
                 ],
             }],
         ],

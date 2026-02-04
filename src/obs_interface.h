@@ -24,7 +24,6 @@
 #include <string>
 
 
-// TODO [linux-port]: Linux audio sources
 #ifdef _WIN32
 #define AUDIO_INPUT "wasapi_input_capture"
 #define AUDIO_OUTPUT "wasapi_output_capture"
@@ -124,21 +123,19 @@ class ObsInterface {
     obs_scene_t *scene = nullptr;
 
   private:
-    std::atomic<bool> shutting_down{false};;
+    std::atomic<bool> shutting_down{false};
     obs_output_t *output = nullptr;
 
     obs_encoder_t *video_encoder = nullptr;
     obs_encoder_t *audio_encoder = nullptr;
     
     obs_display_t *display = nullptr;
-    // TODO: [linux-port]
-    #ifdef _WIN32
+#ifdef _WIN32
     HWND preview_hwnd = nullptr; // window handle for scene preview
-    #elif defined(__linux__)
+#elif defined(__linux__)
     Window preview_window = 0;
     Display* x11_display = nullptr;
-    #endif
-    // TODO: [linux-port] END
+#endif
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";

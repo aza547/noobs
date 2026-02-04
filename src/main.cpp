@@ -360,7 +360,8 @@ Napi::Value ObsCreateSource(const Napi::CallbackInfo& info) {
     (info.Length() == 2 || info.Length() == 3) &&
     info[0].IsString() && 
     info[1].IsString() &&
-    (info.Length() == 2 || info[2].IsObject()); // TODO: [linux-port] Pipewire settings, need to create initial due to RestoreToken
+    // settings are passed on linux for pipewire restore tokens
+    (info.Length() == 2 || info[2].IsObject());
 
   if (!valid) {
     Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsCreateSource").ThrowAsJavaScriptException();

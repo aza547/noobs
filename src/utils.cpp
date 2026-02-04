@@ -17,15 +17,21 @@
 
 // std
 #include <chrono>
-// TODO: [linux-port] for filesystem paths 
+#include <cstring>
 #include <filesystem>
-// TODO: [linux-port] END
 #include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
+#ifdef __linux__
+  // Pipewire with cursor capture spams debug messages on every cursor move.
+  if (strstr(msg, "[pipewire] buffer contains corrupted data")) {
+    return;
+  }
+#endif
+
   static std::stringstream logFileName;
   static bool logInitialized = false;
   
@@ -37,9 +43,7 @@ void log_handler(int lvl, const char *msg, va_list args, void *p) {
     std::string logDir = static_cast<const char*>(p);
 
     if (!logDir.empty() && logDir.back() != '\\' && logDir.back() != '/') {
-      // TODO: [linux-port] use platform filesystem path
       logDir += std::filesystem::path::preferred_separator;
-      // TODO: [linux-port] END
     }
       
     logFileName << logDir << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";

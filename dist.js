@@ -5,17 +5,6 @@ const packageName = 'noobs.node';
 const distRoot = path.resolve(__dirname, 'dist');
 const distBin = path.join(distRoot, 'bin');
 
-// Detect platform
-const platform = process.platform;
-const isWindows = platform === 'win32';
-const isLinux = platform === 'linux';
-
-if (!isWindows && !isLinux) {
-  throw new Error(`Unsupported platform: ${platform}`);
-}
-
-const platformDir = isWindows ? 'win64' : 'linux';
-
 // Clean the dist directory if it exists.
 if (fs.existsSync(distRoot)) {
   fs.rmSync(distRoot, { recursive: true, force: true });
@@ -30,17 +19,19 @@ const addonSrc = path.resolve(__dirname, 'build', 'Release', packageName);
 const addonDest = path.join(distRoot, packageName);
 fs.copyFileSync(addonSrc, addonDest);
 
-// Copy platform-specific binaries
-const binSrc = path.resolve(__dirname, 'bin', 'bin', platformDir);
-const binDst = path.resolve(__dirname, 'dist', 'bin');
+// Copy Windows binaries to dist/bin/win64
+const win64BinSrc = path.resolve(__dirname, 'bin', 'native', 'win64');
+const win64BinDst = path.join(distBin, 'win64');
 
-if (isWindows) {
-  // Copy .dll files on Windows
-  fs.readdirSync(binSrc)
+if (fs.existsSync(win64BinSrc)) {
+  fs.mkdirSync(win64BinDst);
+
+  // Copy .dll files
+  fs.readdirSync(win64BinSrc)
     .filter((file) => file.endsWith('.dll'))
     .forEach((file) => {
-      const src = path.join(binSrc, file);
-      const dst = path.join(binDst, file);
+      const src = path.join(win64BinSrc, file);
+      const dst = path.join(win64BinDst, file);
       fs.copyFileSync(src, dst);
     });
 
@@ -53,25 +44,44 @@ if (isWindows) {
   ];
 
   exeFiles.forEach((file) => {
-    const srcPath = path.resolve(__dirname, 'bin', 'bin', platformDir, file);
-    const destPath = path.resolve(__dirname, 'dist', 'bin', file);
+    const srcPath = path.join(win64BinSrc, file);
+    const destPath = path.join(win64BinDst, file);
     if (fs.existsSync(srcPath)) {
       fs.copyFileSync(srcPath, destPath);
     }
   });
-} else if (isLinux) {
-  // Copy everything from the Linux bin directory (libraries, symlinks, executables)
-  fs.cpSync(binSrc, binDst, { recursive: true });
 }
 
-// Copy plugins themselves.
-const pluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins', platformDir);
-const pluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', platformDir);
+// Copy Linux binaries to dist/bin/linux
+const linuxBinSrc = path.resolve(__dirname, 'bin', 'native', 'linux');
+const linuxBinDst = path.join(distBin, 'linux');
 
-fs.cpSync(pluginSrc, pluginDst, { 
-  recursive: true,
-  filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
-});
+if (fs.existsSync(linuxBinSrc)) {
+  fs.cpSync(linuxBinSrc, linuxBinDst, { recursive: true });
+}
+
+// Copy plugins for both platforms.
+// Windows plugins
+const win64PluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins', 'win64');
+const win64PluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', 'win64');
+
+if (fs.existsSync(win64PluginSrc)) {
+  fs.cpSync(win64PluginSrc, win64PluginDst, { 
+    recursive: true,
+    filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
+  });
+}
+
+// Linux plugins
+const linuxPluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins', 'linux');
+const linuxPluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', 'linux');
+
+if (fs.existsSync(linuxPluginSrc)) {
+  fs.cpSync(linuxPluginSrc, linuxPluginDst, { 
+    recursive: true,
+    filter: (src) => !src.endsWith('.pdb')
+  });
+}
 
 // Copy data, including effects and plugin data.
 const dataSrc = path.resolve(__dirname, 'bin', 'data');
