@@ -2,14 +2,32 @@
 
 #include <obs.h>
 #include <napi.h>
-#include <windows.h>
 #include <map>
 #include <string>
 #include <optional>
 
+#ifdef _WIN32
+#include <windows.h>
 #define AUDIO_INPUT "wasapi_input_capture"
 #define AUDIO_OUTPUT "wasapi_output_capture"
 #define AUDIO_PROCESS "wasapi_process_output_capture"
+typedef HWND NativeWindowHandle;
+#else
+// Linux - X11 and Wayland support
+#include <X11/Xlib.h>
+#include <cstdlib>  // for getenv
+#define AUDIO_INPUT "pulse_input_capture"
+#define AUDIO_OUTPUT "pulse_output_capture"
+#define AUDIO_PROCESS "pulse_output_capture"  // No direct equivalent on Linux
+typedef uint32_t NativeWindowHandle;  // X11 Window ID (XID) - also used via XWayland
+
+enum class LinuxDisplayServer {
+  UNKNOWN,
+  X11,
+  WAYLAND,
+  XWAYLAND  // Wayland session but using XWayland for this window
+};
+#endif
 
 class ObsInterface;
 
@@ -60,6 +78,7 @@ class ObsInterface {
     obs_data_t* getSourceSettings(std::string name); // Get the current settings.
     void setSourceSettings(std::string name, obs_data_t* settings); // Set settings.
     obs_properties_t* getSourceProperties(std::string name); // Get the settings schema.
+    SourceSize getSourceDimensions(std::string name); // Get the current width and height of a source.
     void setMuteAudioInputs(bool mute); // Mute or unmute all audio inputs.
     void setSourceVolume(std::string name, float volume); // Set the volume of an audio source.
     void setVolmeterEnabled(bool enabled); // Enable volmeters.
@@ -71,7 +90,7 @@ class ObsInterface {
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
-    void initPreview(HWND parent); // Must call this before showPreview to setup resources.
+    void initPreview(NativeWindowHandle parent); // Must call this before showPreview to setup resources.
     void configurePreview(int x, int y, int width, int height); // Move and resize the preview display.
     void showPreview(); // Show the preview display.
     void hidePreview(); // Hide the preview display, but leave it running.
@@ -83,8 +102,8 @@ class ObsInterface {
     std::vector<std::string> listAvailableVideoEncoders(); // Return a list of available video encoders.
     void setVideoEncoder(std::string id, obs_data_t* settings); // Set the video encoder to use.
 
-    std::map<std::string, obs_source_t*> sources; // Map of source names to obs_source_t pointers. 
-    std::map<std::string, SourceSize> sizes; // Map of source names to their last known size, used for firing callbacks on size changes. 
+    std::map<std::string, obs_source_t*> sources; // Map of source names to obs_source_t pointers.
+    std::map<std::string, SourceSize> sizes; // Map of source names to their last known size, used for firing callbacks on size changes.
     std::map<std::string, obs_volmeter_t*> volmeters; // Map of source names to obs_volmeter_t pointers.
     std::map<std::string, SignalContext*> volmeter_cb_ctx; // Map of volmeter callback contexts.
     std::map<std::string, obs_source_t*> filters; // Map of source names to obs_source_t filter pointers.
@@ -99,11 +118,22 @@ class ObsInterface {
 
     obs_encoder_t *video_encoder = nullptr;
     obs_encoder_t *audio_encoder = nullptr;
-    
+
     obs_display_t *display = nullptr;
-    HWND preview_hwnd = nullptr; // window handle for scene preview
+#ifdef _WIN32
+    NativeWindowHandle preview_hwnd = nullptr; // window handle for scene preview
+#else
+    // Linux preview members
+    LinuxDisplayServer display_server = LinuxDisplayServer::UNKNOWN;
+    Display* x11_display = nullptr;
+    Window x11_preview_window = 0;
+    Window x11_parent_window = 0;
+
+    LinuxDisplayServer detectDisplayServer();
+    bool initX11Preview(NativeWindowHandle parent);
+#endif
     Napi::ThreadSafeFunction jscb; // javascript callback
-    std::string recording_path = ""; 
+    std::string recording_path = "";
     std::string unbuffered_output_filename = "";
     std::string file_extension = "mp4"; // File extension for recordings.
 
@@ -140,11 +170,16 @@ class ObsInterface {
     bool volmeter_enabled = false; // Whether the volmeter callback is enabled.
     bool audio_suppression = false; // Whether audio suppression is enabled.
     bool force_mono = false; // Whether force mono audio is enabled.
+    bool audio_disabled = false; // Whether audio encoding is disabled (fallback for broken FFmpeg).
 
     static void volmeter_callback(
-      void *data, 
+      void *data,
       const float magnitude[MAX_AUDIO_CHANNELS],
-      const float peak[MAX_AUDIO_CHANNELS], 
+      const float peak[MAX_AUDIO_CHANNELS],
       const float inputPeak[MAX_AUDIO_CHANNELS]
     );
+
+#ifdef _WIN32
+    void register_preview_window_class();
+#endif
 };

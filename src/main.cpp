@@ -1,13 +1,16 @@
 #include <napi.h>
-#include <windows.h>
 #include <obs.h>
 #include "obs_interface.h"
 #include "utils.h"
 
-ObsInterface* obs = nullptr;
-
+#ifdef _WIN32
+#include <windows.h>
+// GPU preference exports for Windows
 extern "C" __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
+
+ObsInterface* obs = nullptr;
 
 Napi::Value ObsInit(const Napi::CallbackInfo& info) {
   bool valid = info.Length() == 3 &&
@@ -156,6 +159,38 @@ Napi::Value ObsSetBuffering(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+// Async worker for starting buffer on Linux to prevent blocking
+class StartBufferWorker : public Napi::AsyncWorker {
+public:
+  StartBufferWorker(Napi::Function& callback)
+    : Napi::AsyncWorker(callback), success(false) {}
+
+  void Execute() override {
+    try {
+      blog(LOG_INFO, "StartBufferWorker: Execute starting");
+      obs->startBuffering();
+      success = true;
+      blog(LOG_INFO, "StartBufferWorker: Execute completed successfully");
+    } catch (const std::exception& e) {
+      blog(LOG_ERROR, "StartBufferWorker: Exception: %s", e.what());
+      SetError(e.what());
+    }
+  }
+
+  void OnOK() override {
+    blog(LOG_INFO, "StartBufferWorker: OnOK called");
+    Callback().Call({Env().Null()});
+  }
+
+  void OnError(const Napi::Error& e) override {
+    blog(LOG_ERROR, "StartBufferWorker: OnError called: %s", e.Message().c_str());
+    Callback().Call({Napi::String::New(Env(), e.Message())});
+  }
+
+private:
+  bool success;
+};
+
 Napi::Value ObsStartBuffer(const Napi::CallbackInfo& info) {
   blog(LOG_INFO, "ObsStartBuffer called");
 
@@ -165,6 +200,18 @@ Napi::Value ObsStartBuffer(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
   }
 
+#ifdef __linux__
+  // On Linux, run async to prevent blocking (obs_output_start can hang)
+  if (info.Length() >= 1 && info[0].IsFunction()) {
+    blog(LOG_INFO, "ObsStartBuffer: Using async mode on Linux");
+    Napi::Function callback = info[0].As<Napi::Function>();
+    StartBufferWorker* worker = new StartBufferWorker(callback);
+    worker->Queue();
+    return info.Env().Undefined();
+  }
+#endif
+
+  // Synchronous mode (Windows or no callback provided)
   obs->startBuffering();
   return info.Env().Undefined();
 }
@@ -228,6 +275,7 @@ Napi::Value ObsInitPreview(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
   }
 
+#ifdef _WIN32
   bool valid = info.Length() == 1 && info[0].IsBuffer();
 
   if (!valid) {
@@ -237,13 +285,34 @@ Napi::Value ObsInitPreview(const Napi::CallbackInfo& info) {
 
   Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
 
-  if (buffer.Length() < sizeof(HWND)) {
-    Napi::TypeError::New(info.Env(), "Buffer too small for HWND").ThrowAsJavaScriptException();
+  if (buffer.Length() < sizeof(NativeWindowHandle)) {
+    Napi::TypeError::New(info.Env(), "Buffer too small for window handle").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
 
-  HWND hwnd = *reinterpret_cast<HWND*>(buffer.Data());
+  NativeWindowHandle hwnd = *reinterpret_cast<NativeWindowHandle*>(buffer.Data());
   obs->initPreview(hwnd);
+#else
+  // Linux: Extract X11 Window ID from Electron's getNativeWindowHandle()
+  bool valid = info.Length() == 1 && info[0].IsBuffer();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsInitPreview").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
+
+  if (buffer.Length() < sizeof(NativeWindowHandle)) {
+    Napi::TypeError::New(info.Env(), "Buffer too small for window handle").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  // On Linux, Electron returns the X11 Window ID as a 32-bit unsigned int
+  NativeWindowHandle x11_window_id = *reinterpret_cast<NativeWindowHandle*>(buffer.Data());
+  blog(LOG_INFO, "Received X11 Window ID: %u", x11_window_id);
+  obs->initPreview(x11_window_id);
+#endif
   return info.Env().Undefined();
 }
 
@@ -441,6 +510,29 @@ Napi::Value ObsGetSourceProperties(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value ObsGetSourceDimensions(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsGetSourceDimensions called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool valid = info.Length() == 1 && info[0].IsString();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsGetSourceDimensions").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  SourceSize size = obs->getSourceDimensions(name);
+
+  Napi::Object result = Napi::Object::New(info.Env());
+  result.Set("width", Napi::Number::New(info.Env(), size.width));
+  result.Set("height", Napi::Number::New(info.Env(), size.height));
+
+  return result;
+}
 
 Napi::Value ObsSetMuteAudioInputs(const Napi::CallbackInfo& info) {
   if (!obs) {
@@ -689,6 +781,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("GetSourceSettings", Napi::Function::New(env, ObsGetSourceSettings));
   exports.Set("SetSourceSettings", Napi::Function::New(env, ObsSetSourceSettings));
   exports.Set("GetSourceProperties", Napi::Function::New(env, ObsGetSourceProperties));
+  exports.Set("GetSourceDimensions", Napi::Function::New(env, ObsGetSourceDimensions));
   exports.Set("SetMuteAudioInputs", Napi::Function::New(env, ObsSetMuteAudioInputs));
   exports.Set("SetSourceVolume", Napi::Function::New(env, ObsSetSourceVolume));
   exports.Set("SetVolmeterEnabled", Napi::Function::New(env, ObsSetVolmeterEnabled));

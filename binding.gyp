@@ -12,12 +12,36 @@
             "<!@(node -p \"require('node-addon-api').include\")",
             "include"
         ],
-        'libraries': [
-            "../bin/64bit/obs.lib",
-        ],
         'dependencies': [
             "<!(node -p \"require('node-addon-api').gyp\")"
         ],
         'defines': [ 'NAPI_DISABLE_CPP_EXCEPTIONS' ],
+        'conditions': [
+            ['OS=="win"', {
+                'libraries': [
+                    "../bin/64bit/obs.lib",
+                ],
+            }],
+            ['OS=="linux"', {
+                'include_dirs': [
+                    "/usr/include/obs"
+                ],
+                'libraries': [
+                    "-lobs",
+                    "-lobs-frontend-api",
+                    "-lX11"
+                ],
+                'cflags': [
+                    "-fPIC"
+                ],
+                'cflags_cc': [
+                    "-fPIC",
+                    "-std=c++17"
+                ],
+                'defines': [
+                    "__linux__"
+                ]
+            }]
+        ]
     }]
 }

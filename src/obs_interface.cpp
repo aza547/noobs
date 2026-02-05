@@ -1,9 +1,18 @@
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <obs.h>
 #include "utils.h"
 #include "obs_interface.h"
 #include <vector>
 #include <string>
+#include <cstring>
+#include <stdexcept>
+#include <thread>
+#include <chrono>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 #include <graphics/matrix4.h>
 #include <graphics/vec4.h>
 #include <util/platform.h>
@@ -136,7 +145,11 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
   ovi.gpu_conversion = true;
-  ovi.graphics_module = "libobs-d3d11.dll"; 
+#ifdef _WIN32
+  ovi.graphics_module = "libobs-d3d11.dll";
+#else
+  ovi.graphics_module = "libobs-opengl.so";
+#endif 
 
   int rc = obs_reset_video(&ovi);
 
@@ -168,22 +181,48 @@ void ObsInterface::init_obs(const std::string& distPath) {
     blog(LOG_ERROR, "OBS not initialized!");
     throw std::runtime_error("OBS initialization failed");
   }
-  
+
+#ifdef _WIN32
   std::string basePath = distPath;
 
   if (basePath.back() != '/' && basePath.back() != '\\') {
-    // Add a trailing slash if not present.
     basePath += '/';
   }
 
   std::string effectsPath = basePath + "data/effects/";
   std::string pluginPath = basePath + "obs-plugins/";
   std::string pluginDataPath = basePath + "data/obs-plugins/";
+#else
+  (void)distPath;
+  std::string effectsPath = "/usr/share/obs/libobs/";
+  std::string pluginDataPath = "/usr/share/obs/obs-plugins/";
 
-  blog(LOG_INFO, "Base path: %s", basePath.c_str());
+  // Plugin library path varies by distro.
+  std::string pluginPath;
+  const char* pluginCandidates[] = {
+    "/usr/lib64/obs-plugins/",
+    "/usr/lib/x86_64-linux-gnu/obs-plugins/",
+    "/usr/lib/obs-plugins/",
+    nullptr
+  };
+
+  for (int i = 0; pluginCandidates[i]; i++) {
+    struct stat st;
+    if (stat(pluginCandidates[i], &st) == 0 && S_ISDIR(st.st_mode)) {
+      pluginPath = pluginCandidates[i];
+      break;
+    }
+  }
+
+  if (pluginPath.empty()) {
+    blog(LOG_WARNING, "OBS plugin directory not found, falling back to /usr/lib64/obs-plugins/");
+    pluginPath = "/usr/lib64/obs-plugins/";
+  }
+#endif
+
   blog(LOG_INFO, "Effects path: %s", effectsPath.c_str());
   blog(LOG_INFO, "Plugin path: %s", pluginPath.c_str());
-  blog(LOG_INFO, "Data path: %s", pluginDataPath.c_str());
+  blog(LOG_INFO, "Plugin data path: %s", pluginDataPath.c_str());
 
   // Add the effects path. We need this before resetting video and audio
   // to ensure the effects are available. The function is deprecated in
@@ -204,7 +243,8 @@ void ObsInterface::init_obs(const std::string& distPath) {
     throw std::runtime_error("Failed to reset audio!");
   }
 
-  std::vector<std::string> modules = { 
+#ifdef _WIN32
+  std::vector<std::string> modules = {
     "obs-x264",     // Software encoder.
     "obs-ffmpeg",   // Contains AMF (AMD) encoder support.
     "win-capture",  // Required for basically all forms of capture on Windows.
@@ -214,18 +254,39 @@ void ObsInterface::init_obs(const std::string& distPath) {
     "obs-qsv11",    // Required for QSV video encoding.
     "obs-filters"   // Required for audio filters.
   };
+  std::string moduleExt = ".dll";
+#else
+  std::vector<std::string> modules = {
+    "obs-x264",           // Software encoder.
+    "obs-ffmpeg",         // Contains VAAPI/AMD encoder support and muxers.
+    "obs-nvenc",          // NVIDIA NVENC hardware encoder.
+    "linux-capture",      // Required for capture on Linux (X11).
+    "linux-pipewire",     // Required for PipeWire screen capture (Wayland/X11).
+    "image-source",       // Required for image sources.
+    "linux-pulseaudio",   // Required for PulseAudio audio input.
+    "obs-filters",        // Required for audio filters.
+    "obs-libfdk"          // FDK-AAC audio encoder, avoids FFmpeg ABI issues on Linux.
+  };
+  std::string moduleExt = ".so";
+#endif
 
   for (const auto& module : modules) {
-    std::string modulePath = pluginPath + module + ".dll";
+    std::string modulePath = pluginPath + module + moduleExt;
     std::string moduleDataPath = pluginDataPath + module;
 
-    // NVENC fails if there is no NVENC hardware support.
-    bool allowFail = module == "obs-nvenc";
+    // NVENC/QSV fail if there is no hardware support.
+    // On Linux, capture plugins may fail depending on display server setup.
+    // obs-libfdk may not be installed on all distributions.
+    bool allowFail = (module == "obs-nvenc") || (module == "obs-qsv11") ||
+                     (module == "linux-capture") || (module == "linux-pipewire") ||
+                     (module == "obs-libfdk");
     load_module(modulePath.c_str(), moduleDataPath.c_str(), allowFail);
   }
-  
+
   obs_post_load_modules();
+#ifdef _WIN32
   register_preview_window_class();
+#endif
 
   list_encoders();
   list_source_types();
@@ -258,15 +319,26 @@ void ObsInterface::create_output() {
 
   if (buffering) {
     blog(LOG_INFO, "Set replay buffer settings");
+#ifdef _WIN32
     obs_data_set_int(settings, "max_time_sec", 60);
     obs_data_set_int(settings, "max_size_mb", 1024);
+#else
+    // Larger buffer since we save at encounter end on Linux.
+    obs_data_set_int(settings, "max_time_sec", 1200);
+    obs_data_set_int(settings, "max_size_mb", 4096);
+#endif
     obs_data_set_string(settings, "directory", recording_path.c_str());
     obs_data_set_string(settings, "format", "%CCYY-%MM-%DD %hh-%mm-%ss");
     obs_data_set_string(settings, "extension", file_extension.c_str());
   } else {
     blog(LOG_INFO, "Set ffmpeg_muxer settings");
     // Need to specify the exact path for ffmpeg_muxer. We will write this again at start recording.
-    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
+#ifdef _WIN32
+    std::string pathSep = "\\";
+#else
+    std::string pathSep = "/";
+#endif
+    std::string filename = recording_path + pathSep + get_current_date_time() + "." + file_extension;
     obs_data_set_string(settings, "path", filename.c_str());
     unbuffered_output_filename = filename;
   }
@@ -333,24 +405,68 @@ void ObsInterface::create_audio_encoders() {
     audio_encoder = nullptr;
   }
 
+  // Create encoder settings with explicit sample rate
+  obs_data_t *enc_settings = obs_data_create();
+  obs_data_set_int(enc_settings, "bitrate", 128);
+  obs_data_set_int(enc_settings, "samplerate", 48000);
+
+#ifndef _WIN32
+  // Prefer FDK-AAC on Linux to avoid FFmpeg ABI incompatibilities.
+  // Falls back to ffmpeg_aac or ffmpeg_opus if unavailable.
+  blog(LOG_INFO, "Linux: Trying FDK-AAC encoder");
   audio_encoder = obs_audio_encoder_create(
-    "ffmpeg_aac", 
-    "aac_file",
-    NULL, 
-    0, 
+    "libfdk_aac",
+    "fdk_file",
+    enc_settings,
+    0,
     NULL
   );
 
+  if (audio_encoder) {
+    blog(LOG_INFO, "FDK-AAC encoder created successfully");
+  } else {
+    blog(LOG_INFO, "FDK-AAC not available, trying FFmpeg AAC");
+  }
+#endif
+
   if (!audio_encoder) {
-    blog(LOG_ERROR, "Failed to create audio encoder!");
-    throw std::runtime_error("Failed to create audio encoder!");
+    audio_encoder = obs_audio_encoder_create(
+      "ffmpeg_aac",
+      "aac_file",
+      enc_settings,
+      0,
+      NULL
+    );
+    if (audio_encoder) {
+      blog(LOG_INFO, "FFmpeg AAC encoder created successfully");
+    }
   }
 
-  blog(LOG_INFO, "Set audio encoder settings");
-  obs_data_t *aenc_settings = obs_data_create();
-  obs_data_set_int(aenc_settings, "bitrate", 128);
-  obs_encoder_update(audio_encoder, aenc_settings);
-  obs_data_release(aenc_settings);
+  if (!audio_encoder) {
+    blog(LOG_INFO, "AAC encoder not available, trying Opus");
+    audio_encoder = obs_audio_encoder_create(
+      "ffmpeg_opus",
+      "opus_file",
+      enc_settings,
+      0,
+      NULL
+    );
+    if (audio_encoder) {
+      blog(LOG_INFO, "FFmpeg Opus encoder created successfully");
+    }
+  }
+
+  obs_data_release(enc_settings);
+
+  if (!audio_encoder) {
+    blog(LOG_WARNING, "No audio encoder available - recording will be video-only!");
+    blog(LOG_WARNING, "On Linux, try installing: fdk-aac-free (Fedora) or libfdk-aac2 (Debian/Ubuntu)");
+    audio_disabled = true;
+    return;
+  }
+
+  audio_disabled = false;
+  blog(LOG_INFO, "Audio encoder created successfully");
 
   obs_output_set_audio_encoder(output, audio_encoder, 0);
   obs_encoder_set_audio(audio_encoder, obs_get_audio());
@@ -590,6 +706,23 @@ obs_properties_t* ObsInterface::getSourceProperties(std::string name) {
   return props;
 }
 
+SourceSize ObsInterface::getSourceDimensions(std::string name) {
+  blog(LOG_INFO, "Get source dimensions for: %s", name.c_str());
+  auto it = sources.find(name);
+
+  if (it == sources.end()) {
+    blog(LOG_WARNING, "Source %s not found when getting dimensions", name.c_str());
+    throw std::runtime_error("Source not found!");
+  }
+
+  obs_source_t* source = it->second;
+  uint32_t width = obs_source_get_width(source);
+  uint32_t height = obs_source_get_height(source);
+
+  blog(LOG_INFO, "Source %s dimensions: %dx%d", name.c_str(), width, height);
+  return { width, height };
+}
+
 void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
   long long code = calldata_int(cd, "code");
   const char *err = calldata_string(cd, "last_error");
@@ -765,16 +898,17 @@ void draw_callback(void* data, uint32_t cx, uint32_t cy) {
   }
 }
 
-void ObsInterface::initPreview(HWND parent) {
+void ObsInterface::initPreview(NativeWindowHandle parent) {
   blog(LOG_INFO, "ObsInterface::initPreview");
 
+#ifdef _WIN32
   if (!preview_hwnd) {
     blog(LOG_INFO, "Creating preview child window");
 
     preview_hwnd = CreateWindowEx(
-      0,         
+      0,
       TEXT("PreviewWindowClass"),   // Window class we already registered earlier
-      TEXT("OBS Preview"),          // Window name 
+      TEXT("OBS Preview"),          // Window name
       WS_POPUP,
       0, 0,                   // Initial position (x, y)
       0, 0,                   // Initial size (width, height)
@@ -824,11 +958,193 @@ void ObsInterface::initPreview(HWND parent) {
   }
 
   obs_display_set_enabled(display, false);
+#else
+  blog(LOG_INFO, "Initializing Linux preview with parent window: %u", parent);
+
+  if (parent == 0) {
+    blog(LOG_ERROR, "Invalid parent window ID");
+    return;
+  }
+
+  // Detect display server type
+  display_server = detectDisplayServer();
+
+  switch (display_server) {
+    case LinuxDisplayServer::X11:
+      blog(LOG_INFO, "Using X11 display server");
+      if (!initX11Preview(parent)) {
+        blog(LOG_ERROR, "Failed to initialize X11 preview");
+        return;
+      }
+      break;
+
+    case LinuxDisplayServer::XWAYLAND:
+      blog(LOG_INFO, "Using XWayland (Wayland session with X11 compatibility)");
+      // XWayland provides X11 compatibility, so we can use the X11 path
+      if (!initX11Preview(parent)) {
+        blog(LOG_ERROR, "Failed to initialize XWayland preview");
+        return;
+      }
+      break;
+
+    case LinuxDisplayServer::WAYLAND:
+      blog(LOG_WARNING, "Pure Wayland detected, attempting XWayland fallback");
+      if (!initX11Preview(parent)) {
+        blog(LOG_ERROR, "Preview not available on pure Wayland without XWayland");
+        blog(LOG_INFO, "Consider running the app with: GDK_BACKEND=x11 or enabling XWayland");
+        return;
+      }
+      break;
+
+    default:
+      blog(LOG_WARNING, "Unknown display server, attempting X11");
+      if (!initX11Preview(parent)) {
+        blog(LOG_ERROR, "Failed to initialize preview");
+        return;
+      }
+      break;
+  }
+
+  obs_display_set_enabled(display, false);
+#endif
 }
+
+#ifndef _WIN32
+LinuxDisplayServer ObsInterface::detectDisplayServer() {
+  // Check XDG_SESSION_TYPE first (most reliable on modern systems)
+  const char* session_type = std::getenv("XDG_SESSION_TYPE");
+  const char* wayland_display = std::getenv("WAYLAND_DISPLAY");
+  const char* x11_display_env = std::getenv("DISPLAY");
+
+  blog(LOG_INFO, "Display server detection:");
+  blog(LOG_INFO, "  XDG_SESSION_TYPE: %s", session_type ? session_type : "(not set)");
+  blog(LOG_INFO, "  WAYLAND_DISPLAY: %s", wayland_display ? wayland_display : "(not set)");
+  blog(LOG_INFO, "  DISPLAY: %s", x11_display_env ? x11_display_env : "(not set)");
+
+  if (session_type) {
+    if (strcmp(session_type, "wayland") == 0) {
+      // Running on Wayland session
+      if (x11_display_env) {
+        // DISPLAY is set, XWayland is available
+        blog(LOG_INFO, "Detected: Wayland session with XWayland");
+        return LinuxDisplayServer::XWAYLAND;
+      } else {
+        // Pure Wayland, no XWayland
+        blog(LOG_INFO, "Detected: Pure Wayland (no XWayland)");
+        return LinuxDisplayServer::WAYLAND;
+      }
+    } else if (strcmp(session_type, "x11") == 0) {
+      blog(LOG_INFO, "Detected: X11 session");
+      return LinuxDisplayServer::X11;
+    }
+  }
+
+  // Fallback detection
+  if (wayland_display && x11_display_env) {
+    blog(LOG_INFO, "Detected: Wayland with XWayland (fallback)");
+    return LinuxDisplayServer::XWAYLAND;
+  } else if (wayland_display) {
+    blog(LOG_INFO, "Detected: Wayland (fallback)");
+    return LinuxDisplayServer::WAYLAND;
+  } else if (x11_display_env) {
+    blog(LOG_INFO, "Detected: X11 (fallback)");
+    return LinuxDisplayServer::X11;
+  }
+
+  blog(LOG_WARNING, "Could not detect display server");
+  return LinuxDisplayServer::UNKNOWN;
+}
+
+bool ObsInterface::initX11Preview(NativeWindowHandle parent) {
+  // Store the parent window ID
+  x11_parent_window = parent;
+
+  // Open connection to X11 display
+  if (!x11_display) {
+    x11_display = XOpenDisplay(NULL);
+    if (!x11_display) {
+      blog(LOG_ERROR, "Failed to open X11 display connection");
+      return false;
+    }
+    blog(LOG_INFO, "X11 display connection opened");
+  }
+
+  // Create a child window for the preview
+  if (!x11_preview_window) {
+    blog(LOG_INFO, "Creating X11 preview child window for parent: %u", parent);
+
+    // Get the parent window's attributes to understand its properties
+    XWindowAttributes parent_attrs;
+    if (!XGetWindowAttributes(x11_display, x11_parent_window, &parent_attrs)) {
+      blog(LOG_ERROR, "Failed to get parent window attributes - window may not exist or be accessible");
+      return false;
+    }
+
+    blog(LOG_INFO, "Parent window: screen=%d, visual depth=%d, width=%d, height=%d",
+         XScreenNumberOfScreen(parent_attrs.screen),
+         parent_attrs.depth,
+         parent_attrs.width,
+         parent_attrs.height);
+
+    // Create a simple window as a child of the parent
+    // Initial size 1x1, will be resized by configurePreview
+    x11_preview_window = XCreateSimpleWindow(
+      x11_display,
+      x11_parent_window,  // Parent window
+      0, 0,               // Position (x, y)
+      1, 1,               // Size (width, height) - will be configured later
+      0,                  // Border width
+      BlackPixel(x11_display, DefaultScreen(x11_display)),  // Border color
+      BlackPixel(x11_display, DefaultScreen(x11_display))   // Background color
+    );
+
+    if (!x11_preview_window) {
+      blog(LOG_ERROR, "Failed to create X11 preview window");
+      return false;
+    }
+
+    blog(LOG_INFO, "X11 preview window created: %lu", x11_preview_window);
+
+    // Select events we want to receive
+    XSelectInput(x11_display, x11_preview_window, ExposureMask | StructureNotifyMask);
+
+    // Flush to ensure window is created
+    XFlush(x11_display);
+  }
+
+  // Create OBS display with the X11 window
+  if (!display) {
+    blog(LOG_INFO, "Creating OBS display for X11 window");
+
+    gs_init_data gs_data = {};
+    gs_data.adapter = 0;
+    gs_data.cx = 1920; // Gets overwritten when we call configurePreview()
+    gs_data.cy = 1080; // Gets overwritten when we call configurePreview()
+    gs_data.format = GS_BGRA;
+    gs_data.zsformat = GS_ZS_NONE;
+    gs_data.num_backbuffers = 1;
+    gs_data.window.id = x11_preview_window;
+    gs_data.window.display = x11_display;
+
+    display = obs_display_create(&gs_data, 0x0);
+
+    if (!display) {
+      blog(LOG_ERROR, "Failed to create OBS display - check OBS/OpenGL initialization");
+      return false;
+    }
+
+    blog(LOG_INFO, "OBS display created successfully");
+    obs_display_add_draw_callback(display, draw_callback, this);
+  }
+
+  return true;
+}
+#endif
 
 void ObsInterface::configurePreview(int x, int y, int width, int height) {
   blog(LOG_INFO, "ObsInterface::configurePreview");
 
+#ifdef _WIN32
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
     return;
@@ -857,11 +1173,33 @@ void ObsInterface::configurePreview(int x, int y, int width, int height) {
 
   obs_display_resize(display, width, height);
   obs_display_set_enabled(display, true);
+#else
+  if (!x11_display || !x11_preview_window) {
+    blog(LOG_ERROR, "X11 preview not initialized");
+    return;
+  }
+
+  if (!display) {
+    blog(LOG_ERROR, "OBS display not initialized");
+    return;
+  }
+
+  blog(LOG_INFO, "Configuring X11 preview: position (%d, %d), size (%d x %d)", x, y, width, height);
+
+  // Move and resize the X11 preview window
+  XMoveResizeWindow(x11_display, x11_preview_window, x, y, width, height);
+  XFlush(x11_display);
+
+  // Resize the OBS display
+  obs_display_resize(display, width, height);
+  obs_display_set_enabled(display, true);
+#endif
 }
 
 void ObsInterface::showPreview() {
   blog(LOG_INFO, "ObsInterface::showPreview");
 
+#ifdef _WIN32
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
     return;
@@ -874,20 +1212,45 @@ void ObsInterface::showPreview() {
 
   ShowWindow(preview_hwnd, SW_SHOW);
   obs_display_set_enabled(display, true);
+#else
+  if (!x11_display || !x11_preview_window) {
+    blog(LOG_ERROR, "X11 preview not initialized");
+    return;
+  }
+
+  if (!display) {
+    blog(LOG_ERROR, "OBS display not initialized");
+    return;
+  }
+
+  blog(LOG_INFO, "Showing X11 preview window");
+  XMapWindow(x11_display, x11_preview_window);
+  XFlush(x11_display);
+  obs_display_set_enabled(display, true);
+#endif
 }
 
 void ObsInterface::hidePreview() {
   blog(LOG_INFO, "ObsInterface::hidePreview");
 
+#ifdef _WIN32
   if (preview_hwnd) {
     ShowWindow(preview_hwnd, SW_HIDE);
     blog(LOG_INFO, "Preview child window hidden");
   }
+#else
+  if (x11_display && x11_preview_window) {
+    blog(LOG_INFO, "Hiding X11 preview window");
+    XUnmapWindow(x11_display, x11_preview_window);
+    XFlush(x11_display);
+  }
+#endif
 }
 
 void ObsInterface::disablePreview() {
   blog(LOG_INFO, "ObsInterface::disablePreview");
 
+#ifdef _WIN32
   if (!display) {
     blog(LOG_ERROR, "Preview display not initialized");
     return;
@@ -895,19 +1258,29 @@ void ObsInterface::disablePreview() {
 
   hidePreview();
   obs_display_set_enabled(display, false);
+#else
+  if (!display) {
+    blog(LOG_ERROR, "OBS display not initialized");
+    return;
+  }
+
+  hidePreview();
+  obs_display_set_enabled(display, false);
+#endif
 }
 
 PreviewInfo ObsInterface::getPreviewInfo() {
-  if (!display) {
-    blog(LOG_WARNING, "Display not initialized when calling getPreviewInfo");
-    return { 1920, 1080, 1920, 1080 }; // Default values
-  }
-
   obs_video_info ovi;
   obs_get_video_info(&ovi);
 
+#ifdef _WIN32
+  if (!display) {
+    blog(LOG_WARNING, "Display not initialized when calling getPreviewInfo");
+    return { ovi.base_width, ovi.base_height, ovi.base_width, ovi.base_height };
+  }
+
   uint32_t width, height;
-	obs_display_size(display, &width, &height);
+  obs_display_size(display, &width, &height);
 
   PreviewInfo info = {
     ovi.base_width,
@@ -917,6 +1290,24 @@ PreviewInfo ObsInterface::getPreviewInfo() {
   };
 
   return info;
+#else
+  if (!display) {
+    blog(LOG_WARNING, "Display not initialized when calling getPreviewInfo");
+    return { ovi.base_width, ovi.base_height, ovi.base_width, ovi.base_height };
+  }
+
+  uint32_t width, height;
+  obs_display_size(display, &width, &height);
+
+  PreviewInfo info = {
+    ovi.base_width,
+    ovi.base_height,
+    width,
+    height,
+  };
+
+  return info;
+#endif
 }
 
 void ObsInterface::setDrawSourceOutline(bool enabled) {
@@ -1026,6 +1417,28 @@ ObsInterface::~ObsInterface() {
   //   obs_encoder_release(audio_encoder);
   // }
 
+  // Clean up display before shutting down OBS
+  if (display) {
+    blog(LOG_DEBUG, "Destroying OBS display");
+    obs_display_destroy(display);
+    display = nullptr;
+  }
+
+#ifndef _WIN32
+  // Clean up X11 resources on Linux
+  if (x11_preview_window && x11_display) {
+    blog(LOG_DEBUG, "Destroying X11 preview window");
+    XDestroyWindow(x11_display, x11_preview_window);
+    x11_preview_window = 0;
+  }
+
+  if (x11_display) {
+    blog(LOG_DEBUG, "Closing X11 display connection");
+    XCloseDisplay(x11_display);
+    x11_display = nullptr;
+  }
+#endif
+
   blog(LOG_DEBUG, "Now shutting down OBS");
   obs_shutdown();
 
@@ -1067,13 +1480,69 @@ void ObsInterface::startBuffering() {
     return;
   }
 
+  blog(LOG_INFO, "Validating OBS state before starting buffer");
+
+  // Check video output is configured
+  video_t *video = obs_get_video();
+  if (!video) {
+    blog(LOG_ERROR, "No video output configured!");
+    throw std::runtime_error("No video output configured!");
+  }
+  blog(LOG_INFO, "  Video output: configured");
+
+  // Check audio output is configured
+  audio_t *audio = obs_get_audio();
+  if (!audio) {
+    blog(LOG_ERROR, "No audio output configured!");
+    throw std::runtime_error("No audio output configured!");
+  }
+  blog(LOG_INFO, "  Audio output: configured");
+
+  // Check scene is set as output source
+  obs_source_t *scene_source = obs_get_output_source(0);
+  if (!scene_source) {
+    blog(LOG_ERROR, "No scene source set as output!");
+    throw std::runtime_error("No scene source set as output!");
+  }
+  uint32_t scene_width = obs_source_get_width(scene_source);
+  uint32_t scene_height = obs_source_get_height(scene_source);
+  blog(LOG_INFO, "  Scene source: %s (%ux%u)", obs_source_get_name(scene_source), scene_width, scene_height);
+  obs_source_release(scene_source);
+
+  // Check encoders
+  blog(LOG_INFO, "About to call obs_output_start...");
+  blog(LOG_INFO, "  Output type: %s", obs_output_get_id(output));
+  blog(LOG_INFO, "  Video encoder: %s", video_encoder ? obs_encoder_get_id(video_encoder) : "NULL");
+  blog(LOG_INFO, "  Audio encoder: %s", audio_encoder ? obs_encoder_get_id(audio_encoder) : "NULL");
+
+  if (!video_encoder) {
+    blog(LOG_ERROR, "No video encoder set!");
+    throw std::runtime_error("No video encoder set!");
+  }
+
+  if (!audio_encoder) {
+    if (audio_disabled) {
+      blog(LOG_WARNING, "Audio encoder disabled - recording will be video-only");
+    } else {
+      blog(LOG_ERROR, "No audio encoder set!");
+      throw std::runtime_error("No audio encoder set!");
+    }
+  }
+
+  // Check if encoders are active
+  blog(LOG_INFO, "  Video encoder active: %s", obs_encoder_active(video_encoder) ? "yes" : "no");
+  blog(LOG_INFO, "  Audio encoder active: %s", audio_encoder ? (obs_encoder_active(audio_encoder) ? "yes" : "no") : "disabled");
+
+  blog(LOG_INFO, "Calling obs_output_start NOW");
   bool success = obs_output_start(output);
+  blog(LOG_INFO, "obs_output_start returned: %s", success ? "true" : "false");
 
   if (!success) {
-    blog(LOG_ERROR, "Failed to start buffering!");
+    const char *err = obs_output_get_last_error(output);
+    blog(LOG_ERROR, "Failed to start buffering! Error: %s", err ? err : "Unknown");
     throw std::runtime_error("Failed to start buffering!");
   }
-    
+
   blog(LOG_INFO, "ObsInterface::startBuffering exited");
 }
 
@@ -1093,21 +1562,42 @@ void ObsInterface::startRecording(int offset) {
       throw std::runtime_error("Buffer is not active");
     }
 
-    blog(LOG_INFO, "calling save proc handler");
+#ifdef _WIN32
+    blog(LOG_INFO, "Saving replay buffer to file with offset %d", offset);
     calldata cd;
     calldata_init(&cd);
-    calldata_set_int(&cd, "offset_seconds", offset);
     proc_handler_t *ph = obs_output_get_proc_handler(output);
+
+    if (!ph) {
+      blog(LOG_ERROR, "Failed to get proc handler from output");
+      throw std::runtime_error("Failed to get proc handler from output");
+    }
+
+    calldata_set_int(&cd, "offset_seconds", offset);
     bool success = proc_handler_call(ph, "convert", &cd);
     calldata_free(&cd);
 
     if (!success) {
-      blog(LOG_ERROR, "Failed to call convert procedure handler");
-      throw std::runtime_error("Failed to call convert procedure handler");
+      const char *last_error = obs_output_get_last_error(output);
+      blog(LOG_ERROR, "Failed to save replay buffer. Error: %s", last_error ? last_error : "unknown");
+      blog(LOG_ERROR, "Output active: %s", obs_output_active(output) ? "yes" : "no");
+      blog(LOG_ERROR, "Output type: %s", obs_output_get_id(output));
+      throw std::runtime_error("Failed to save replay buffer");
     }
+
+    blog(LOG_INFO, "Replay buffer save triggered successfully");
+#else
+    // On Linux, the buffer is saved at encounter end instead.
+    blog(LOG_INFO, "Linux: Recording started, will save buffer at encounter end (offset %d ignored)", offset);
+#endif
   } else {
     obs_data_t *ffmpeg_settings = obs_data_create();
-    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
+#ifdef _WIN32
+    std::string pathSep = "\\";
+#else
+    std::string pathSep = "/";
+#endif
+    std::string filename = recording_path + pathSep + get_current_date_time() + "." + file_extension;
     obs_data_set_string(ffmpeg_settings,  "path", filename.c_str());
     obs_output_update(output, ffmpeg_settings);
     obs_data_release(ffmpeg_settings);
@@ -1143,6 +1633,59 @@ void ObsInterface::stopRecording() {
     blog(LOG_WARNING, "Output is not active");
     return;
   }
+
+#ifndef _WIN32
+  if (buffering) {
+    blog(LOG_INFO, "Linux: Saving replay buffer at encounter end");
+    proc_handler_t *ph = obs_output_get_proc_handler(output);
+
+    if (ph) {
+      calldata old_cd;
+      calldata_init(&old_cd);
+      proc_handler_call(ph, "get_last_replay", &old_cd);
+      const char* old_path_ptr = calldata_string(&old_cd, "path");
+      std::string old_path = old_path_ptr ? old_path_ptr : "";
+      calldata_free(&old_cd);
+      blog(LOG_INFO, "Linux: Previous last_replay path: %s", old_path.c_str());
+
+      // Trigger the save
+      calldata cd;
+      calldata_init(&cd);
+      bool success = proc_handler_call(ph, "save", &cd);
+      calldata_free(&cd);
+
+      if (success) {
+        blog(LOG_INFO, "Linux: Replay buffer save triggered, waiting for completion");
+        for (int i = 0; i < 100; i++) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+          // Check if the file path has CHANGED (not just exists)
+          calldata check_cd;
+          calldata_init(&check_cd);
+          proc_handler_call(ph, "get_last_replay", &check_cd);
+          const char* check_path = calldata_string(&check_cd, "path");
+          std::string new_path = check_path ? check_path : "";
+          calldata_free(&check_cd);
+
+          if (!new_path.empty() && new_path != old_path) {
+            blog(LOG_INFO, "Linux: Save completed, new file: %s", new_path.c_str());
+            break;
+          }
+
+          if (i == 99) {
+            blog(LOG_WARNING, "Linux: Timed out waiting for save to complete (path unchanged)");
+          }
+        }
+      } else {
+        const char *last_error = obs_output_get_last_error(output);
+        blog(LOG_ERROR, "Linux: Failed to save replay buffer. Error: %s",
+             last_error ? last_error : "unknown");
+      }
+    } else {
+      blog(LOG_ERROR, "Linux: Failed to get proc handler for save");
+    }
+  }
+#endif
 
   obs_output_stop(output);
   blog(LOG_INFO, "ObsInterface::stopRecording exited");
