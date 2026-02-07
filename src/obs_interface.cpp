@@ -279,7 +279,12 @@ void ObsInterface::init_obs(const std::string& distPath) {
     std::string moduleDataPath = pluginDataPath + module;
 
     // NVENC fails if there is no NVENC hardware support.
+    // QSV11 is hardlinked to libvpl on linux, so will almost always fail on pure AMD hardware
+#ifdef __linux__
+    bool allowFail = module == "obs-nvenc" || module == "obs-qsv11";
+#else
     bool allowFail = module == "obs-nvenc";
+#endif
     load_module(modulePath.c_str(), moduleDataPath.c_str(), allowFail);
   }
   
