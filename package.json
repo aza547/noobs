@@ -18,6 +18,7 @@
     "index.d.ts",
     "binding.gyp",
     "bin/native/win64/obs.lib",
+    "bin/native/linux/libobs.so*",
     "src/**/*",
     "include/**/*",
     "dist/**/*"

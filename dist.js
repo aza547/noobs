@@ -1,9 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const packageName = 'noobs.node';
 const distRoot = path.resolve(__dirname, 'dist');
 const distBin = path.join(distRoot, 'bin');
+
+// Determine platform-specific binary name
+const platform = os.platform();  // 'win32' or 'linux'
+const arch = os.arch();          // 'x64'
+const binaryName = `noobs-${platform}-${arch}.node`;
 
 // Clean the dist directory if it exists.
 if (fs.existsSync(distRoot)) {
@@ -14,10 +19,11 @@ if (fs.existsSync(distRoot)) {
 fs.mkdirSync(distRoot);
 fs.mkdirSync(distBin);
 
-// Copy the compiled .node file.
-const addonSrc = path.resolve(__dirname, 'build', 'Release', packageName);
-const addonDest = path.join(distRoot, packageName);
+// Copy the compiled .node file with platform-specific name.
+const addonSrc = path.resolve(__dirname, 'build', 'Release', 'noobs.node');
+const addonDest = path.join(distRoot, binaryName);
 fs.copyFileSync(addonSrc, addonDest);
+console.log(`Copied ${addonSrc} -> ${addonDest}`);
 
 // Copy Windows binaries to dist/bin/win64
 const win64BinSrc = path.resolve(__dirname, 'bin', 'native', 'win64');
