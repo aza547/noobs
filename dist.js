@@ -29,6 +29,12 @@ console.log(`Copied ${addonSrc} -> ${addonDest}`);
 const win64BinSrc = path.resolve(__dirname, 'bin', 'native', 'win64');
 const win64BinDst = path.join(distBin, 'win64');
 
+const linuxSafeSymlink = {
+    recursive: true, // entire directory
+    dereference: false,       // don't follow symlinks
+    verbatimSymlinks: true,   // preserve relative symlink targets
+}
+
 if (fs.existsSync(win64BinSrc)) {
   fs.mkdirSync(win64BinDst);
 
@@ -63,7 +69,7 @@ const linuxBinSrc = path.resolve(__dirname, 'bin', 'native', 'linux');
 const linuxBinDst = path.join(distBin, 'linux');
 
 if (fs.existsSync(linuxBinSrc)) {
-  fs.cpSync(linuxBinSrc, linuxBinDst, { recursive: true });
+  fs.cpSync(linuxBinSrc, linuxBinDst, linuxSafeSymlink);
 }
 
 // Copy plugins for both platforms.
@@ -84,7 +90,7 @@ const linuxPluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', 'linux');
 
 if (fs.existsSync(linuxPluginSrc)) {
   fs.cpSync(linuxPluginSrc, linuxPluginDst, { 
-    recursive: true,
+    ...linuxSafeSymlink,
     filter: (src) => !src.endsWith('.pdb')
   });
 }
@@ -94,7 +100,7 @@ const dataSrc = path.resolve(__dirname, 'bin', 'data');
 const dataDst = path.resolve(__dirname, 'dist', 'data');
 
 fs.cpSync(dataSrc, dataDst, { 
-  recursive: true,  
+  ...linuxSafeSymlink,
   filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
 });
 

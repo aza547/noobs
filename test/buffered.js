@@ -41,7 +41,7 @@ async function test() {
 
   console.log('Creating source...');
   const sourceType = (process.platform === 'win32' ? 'monitor_capture' : 'pipewire-window-capture-source');
-  const initialSettings = (process.patform === 'win32' ? undefined : {RestoreToken: 'c6f3affd-3db6-44e5-8197-89662d143c71'});
+  const initialSettings = (process.platform === 'win32' ? undefined : {RestoreToken: 'c6f3affd-3db6-44e5-8197-89662d143c71'});
   noobs.CreateSource('Test Source', sourceType, initialSettings);
 
   const settings1 = noobs.GetSourceSettings('Test Source');

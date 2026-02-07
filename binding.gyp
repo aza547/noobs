@@ -28,7 +28,7 @@
                     "-lobs",
                 ],
                 'ldflags': [
-                    "-Wl,-rpath,'$$ORIGIN/../bin/native/linux'",
+                    "-Wl,-rpath,'$$ORIGIN/bin/linux'",
                 ],
             }],
         ],
