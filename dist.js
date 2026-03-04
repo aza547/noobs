@@ -52,7 +52,9 @@ if (fs.existsSync(win64BinSrc)) {
     'obs-ffmpeg-mux.exe', // Required for any sort of recording.
     'obs-amf-test.exe',   // For getting AMF encoding capabilities.
     'obs-nvenc-test.exe', // For getting NVENC encoding capabilities.
-    'obs-qsv-test.exe'    // For getting QSV encoding capabilities.
+    'obs-qsv-test.exe',   // For getting QSV encoding capabilities.
+    'ffmpeg.exe',          // Dynamically linked ffmpeg exe.
+    'ffprobe.exe'          // Dynamically linked ffprobe exe.
   ];
 
   exeFiles.forEach((file) => {
