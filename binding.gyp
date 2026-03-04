@@ -25,7 +25,7 @@
             ['OS=="linux"', {
                 'libraries': [
                     "-L<(module_root_dir)/bin/native/linux",
-                    "-lobs",
+                    "-l:libobs.so.30",
                 ],
                 'ldflags': [
                     "-Wl,-rpath,'$$ORIGIN/bin/linux'",
