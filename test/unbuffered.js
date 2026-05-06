@@ -17,7 +17,7 @@ async function test() {
   console.log('Recording path:', recordingPath);
 
   noobs.Init(distPath, logPath, cb);
-  noobs.SetRecordingCfg(recordingPath, 0);
+  noobs.SetRecordingCfg(recordingPath, "mkv");
 
   console.log('Creating source...');
   const name = noobs.CreateSource('Test Source', 'monitor_capture');
@@ -50,10 +50,10 @@ async function test() {
 
     if (i > 0) {
       console.log('MKV Test');
-      noobs.SetRecordingCfg(recordingPath, 1);
+      noobs.SetRecordingCfg(recordingPath, "mkv");
     } else {
       console.log('MP4 Test');
-      noobs.SetRecordingCfg(recordingPath, 0);
+      noobs.SetRecordingCfg(recordingPath, "mp4");
     }
 
     // Start the recording, with 1s offset into the past.
