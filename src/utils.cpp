@@ -4,12 +4,17 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <mutex>
 #include "utils.h"
 #include <windows.h>
 
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
+  static std::mutex logMutex;
   static std::stringstream logFileName;
   static bool logInitialized = false;
+
+  // make logging thread-safe
+  std::lock_guard<std::mutex> lock(logMutex);
   
   if (!logInitialized) {
     // Build the log filename.
