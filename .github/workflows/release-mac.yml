@@ -1,0 +1,107 @@
+name: release-mac
+on:
+  push:
+    tags: ['v*-mac', 'v*']
+  pull_request:
+    branches: [feat/macos-port, main]
+  workflow_dispatch:
+
+# Cancel in-flight runs of the same workflow for the same ref so
+# accidental dupes don't burn runner minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14 # apple silicon runner
+    timeout-minutes: 90
+    permissions:
+      contents: write # softprops/action-gh-release needs to create releases
+
+    steps:
+      - name: checkout noobs
+        uses: actions/checkout@v4
+
+      # actions/cache only handles paths inside the workspace. Clone
+      # obs-studio inside ./vendor/ rather than the script's default
+      # `../obs-studio` and pass the location via OBS_ROOT.
+      - name: cache obs-studio + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/obs-studio
+          key: obs-studio-${{ hashFiles('scripts/build-libobs-mac.sh') }}
+
+      # OBS 31.0.3's cmake/macos/compilerconfig.cmake requires the
+      # versioned SDK path (`MacOSX14.2.sdk`) — its regex won't match
+      # the default `MacOSX.sdk` symlink. Pin Xcode 15.2 + export
+      # SDKROOT to the versioned path so CMake's auto-detection picks
+      # it up.
+      - name: select Xcode 15.2 + versioned SDK
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.2.app
+          SDK_PATH="/Applications/Xcode_15.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.2.sdk"
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "Versioned SDK not found at $SDK_PATH; available:"
+            ls /Applications/Xcode_15.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/
+            exit 1
+          fi
+          echo "SDKROOT=$SDK_PATH" >> $GITHUB_ENV
+          echo "CMAKE_OSX_SYSROOT=$SDK_PATH" >> $GITHUB_ENV
+
+      - name: install build deps
+        run: |
+          brew install cmake ninja jq ccache pkg-config
+          sudo xcodebuild -license accept || true
+
+      - name: build libobs + plugins (vendor into Frameworks/PlugIns)
+        env:
+          OBS_ROOT: ${{ github.workspace }}/vendor/obs-studio
+        run: |
+          mkdir -p vendor
+          chmod +x scripts/build-libobs-mac.sh
+          ./scripts/build-libobs-mac.sh
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: install npm deps
+        run: npm install
+
+      - name: build noobs.node + dist
+        run: npm run build
+
+      - name: pack tarball
+        run: npm pack
+
+      - name: rename tarball with platform/arch
+        id: pack
+        run: |
+          ORIG=$(ls noobs-*.tgz | head -1)
+          NEW="noobs-darwin-arm64-${ORIG#noobs-}"
+          mv "$ORIG" "$NEW"
+          echo "tarball=$NEW" >> $GITHUB_OUTPUT
+
+      - name: upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: noobs-darwin-arm64
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # Tag-triggered runs publish the tarball on a GitHub Release so
+      # wow-recorder can `npm install` it via a pinned URL without
+      # stepping through manual artifact downloads.
+      - name: attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pack.outputs.tarball }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
