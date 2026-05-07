@@ -11,7 +11,18 @@ Uses a [custom](https://github.com/aza547/warcraft-recorder-obs-studio) fork of 
 - Enable "replay_buffer to recording".
 - Allow libobs to be used as a library easier.
 
-Windows is the only supported platform.
+## Platforms
+
+- **Windows**: x64. Primary target.
+- **macOS**: arm64 only (Apple Silicon — M1 / M2 / M3 / M4 …). Intel
+  Macs not supported. arm64 binaries don't run on x64 CPUs and a
+  universal build isn't shipped. Ships vanilla `libobs` 31.0.3 built
+  from `obsproject/obs-studio` source plus a small plugin set
+  (`obs-x264`, `obs-ffmpeg`, `mac-capture`, `mac-videotoolbox`,
+  `image-source`, `obs-filters`). Replay buffer is unavailable on
+  Mac (vanilla libobs lacks the Streamlabs `convert` proc); recording
+  is plain `ffmpeg_muxer`. See `scripts/build-libobs-mac.sh` + the
+  `release-mac` GitHub Actions workflow for the build pipeline.
 
 ## Installation
 

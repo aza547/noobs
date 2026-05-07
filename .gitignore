@@ -8,3 +8,12 @@ src/.cache
 src/compile_commands.json
 bin/win32-x64-116
 win-capture/
+.DS_Store
+
+# macOS port — vendored libobs + Mac plugin bundles + libobs effect
+# data, all produced by scripts/build-libobs-mac.sh from a checkout
+# of obsproject/obs-studio. Not tracked because the binaries are
+# large + platform-specific; rebuild via the script before packaging.
+Frameworks/
+PlugIns/
+data/

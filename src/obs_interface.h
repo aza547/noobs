@@ -2,14 +2,31 @@
 
 #include <obs.h>
 #include <napi.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
+#include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 #include <optional>
 
+// Per-platform source type ids. Windows uses WASAPI, macOS uses
+// CoreAudio. The C++ source code references AUDIO_INPUT / AUDIO_OUTPUT /
+// AUDIO_PROCESS as platform-neutral constants.
+#ifdef _WIN32
 #define AUDIO_INPUT "wasapi_input_capture"
 #define AUDIO_OUTPUT "wasapi_output_capture"
 #define AUDIO_PROCESS "wasapi_process_output_capture"
+#elif defined(__APPLE__)
+#define AUDIO_INPUT "coreaudio_input_capture"
+#define AUDIO_OUTPUT "coreaudio_output_capture"
+// macOS per-app audio capture goes through SCK's sck_audio_capture.
+// Phase 1 stub: defined for symbol parity, not exercised yet.
+#define AUDIO_PROCESS "sck_audio_capture"
+#else
+#error "Unsupported platform"
+#endif
 
 class ObsInterface;
 
@@ -71,7 +88,11 @@ class ObsInterface {
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
-    void initPreview(HWND parent); // Must call this before showPreview to setup resources.
+    // initPreview takes a native window handle as an opaque uintptr_t so
+    // the same signature works on Win32 (HWND) and macOS (NSView*).
+    // Implementation lives in platform-specific .cpp blocks.
+    std::vector<std::string> listSceneItems(); // Names of all scene items in z-order (bottom→top).
+    void initPreview(uintptr_t parentHandle); // Must call this before showPreview to setup resources.
     void configurePreview(int x, int y, int width, int height); // Move and resize the preview display.
     void showPreview(); // Show the preview display.
     void hidePreview(); // Hide the preview display, but leave it running.
@@ -101,7 +122,18 @@ class ObsInterface {
     obs_encoder_t *audio_encoder = nullptr;
     
     obs_display_t *display = nullptr;
-    HWND preview_hwnd = nullptr; // window handle for scene preview
+    // Opaque native preview window handle. HWND on Win32, NSView* on
+    // macOS — stored as uintptr_t and reinterpreted by platform-
+    // specific code paths.
+    uintptr_t preview_handle = 0;
+    // Mac NSView backingScaleFactor cached at configurePreview. obs_display
+    // is sized in backing pixels but the renderer talks CSS px / points;
+    // getPreviewInfo divides by this to undo the multiply. 1.0 on Win.
+    double preview_backing_scale = 1.0;
+    // Mac child NSWindow holding the canvas view, parented to the
+    // BrowserWindow's NSWindow. Stored as opaque ptr so the header
+    // stays free of Cocoa types. Unused on Win.
+    uintptr_t preview_child_window = 0;
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";
