@@ -215,6 +215,17 @@ Napi::Value ObsForceStopRecording(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+Napi::Value ObsReplayBufferConvertSupported(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsReplayBufferConvertSupported called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool supported = obs->replayBufferConvertSupported();
+  return Napi::Boolean::New(info.Env(), supported);
+}
+
 Napi::Value ObsGetLastRecording(const Napi::CallbackInfo& info) {
   if (!obs) {
     blog(LOG_ERROR, "ObsGetLastRecording called but obs is not initialized");
@@ -689,6 +700,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("StartRecording", Napi::Function::New(env, ObsStartRecording));
   exports.Set("StopRecording", Napi::Function::New(env, ObsStopRecording));
   exports.Set("ForceStopRecording", Napi::Function::New(env, ObsForceStopRecording));
+  exports.Set("ReplayBufferConvertSupported", Napi::Function::New(env, ObsReplayBufferConvertSupported));
   exports.Set("GetLastRecording", Napi::Function::New(env, ObsGetLastRecording));
 
   exports.Set("CreateSource", Napi::Function::New(env, ObsCreateSource));

@@ -64,6 +64,7 @@ class ObsInterface {
     void stopRecording(); // Stop the recording.
     void forceStopRecording(); // Force stop the recording, this will not save the current recording.
     std::string getLastRecording(); // Get the last recorded file path.
+    bool replayBufferConvertSupported(); // Whether replay_buffer exposes WCR's convert proc.
     void setBuffering(bool buffer); // Enable or disable buffering.
     void setRecordingCfg(const std::string& recordingPath, const std::string& fileExtension); // Set the recording path.
     void setVideoContext(int fps, int width, int height); // Reset video settings.

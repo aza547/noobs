@@ -175,6 +175,7 @@ interface Noobs {
   StartRecording(offset: number): void;
   StopRecording(): void;
   ForceStopRecording(): void;
+  ReplayBufferConvertSupported(): boolean;
   GetLastRecording(): string;
   SetRecordingCfg(recordingPath: string, fileExtension: FileExtension): void;
   ResetVideoContext(fps: number, width: number, height: number): void;

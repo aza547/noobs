@@ -1261,6 +1261,35 @@ void ObsInterface::forceStopRecording() {
   blog(LOG_INFO, "ObsInterface::forceStopRecording exited");
 }
 
+bool ObsInterface::replayBufferConvertSupported() {
+  blog(LOG_INFO, "Checking replay buffer convert procedure support");
+
+  obs_output_t *probe = obs_output_create(
+    "replay_buffer",
+    "Replay Buffer Convert Probe",
+    NULL,
+    NULL
+  );
+
+  if (!probe) {
+    blog(LOG_WARNING, "Could not create replay_buffer output for convert probe");
+    return false;
+  }
+
+  calldata cd;
+  calldata_init(&cd);
+  calldata_set_int(&cd, "offset_seconds", 0);
+
+  proc_handler_t *ph = obs_output_get_proc_handler(probe);
+  bool supported = proc_handler_call(ph, "convert", &cd);
+
+  calldata_free(&cd);
+  obs_output_release(probe);
+
+  blog(LOG_INFO, "Replay buffer convert procedure support: %d", supported);
+  return supported;
+}
+
 std::string ObsInterface::getLastRecording() {
   blog(LOG_INFO, "calling get last replay proc handler");
   calldata cd;
