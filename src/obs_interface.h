@@ -8,11 +8,21 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 #include <optional>
 
+// Per-platform source type ids.
+#ifdef _WIN32
 #define AUDIO_INPUT "wasapi_input_capture"
 #define AUDIO_OUTPUT "wasapi_output_capture"
 #define AUDIO_PROCESS "wasapi_process_output_capture"
+#elif defined(__APPLE__)
+#define AUDIO_INPUT "coreaudio_input_capture"
+#define AUDIO_OUTPUT "coreaudio_output_capture"
+#define AUDIO_PROCESS "sck_audio_capture"
+#else
+#error "Unsupported platform"
+#endif
 
 class ObsInterface;
 

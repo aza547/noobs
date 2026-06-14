@@ -4,6 +4,7 @@
 #include <obs.h>
 #include "utils.h"
 #include "obs_interface.h"
+#include <cstdlib>
 #include <vector>
 #include <string>
 #include <graphics/matrix4.h>
@@ -121,6 +122,10 @@ void ObsInterface::setVideoContext(int fps, int width, int height) {
   create_video_encoders();
 }
 
+#ifdef __APPLE__
+static std::string g_mac_graphics_module_path;
+#endif
+
 int ObsInterface::reset_video(int fps, int width, int height) {
   blog(LOG_INFO, "Reset video");
   obs_video_info ovi = {};
@@ -137,14 +142,22 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.range = VIDEO_RANGE_PARTIAL;
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
+  // macOS OpenGL needs the GPU conversion path for NV12 output.
   ovi.gpu_conversion = true;
-  ovi.graphics_module = "libobs-d3d11.dll"; 
+#ifdef _WIN32
+  ovi.graphics_module = "libobs-d3d11.dll";
+#elif defined(__APPLE__)
+  ovi.graphics_module = g_mac_graphics_module_path.empty()
+    ? "libobs-opengl.dylib"
+    : g_mac_graphics_module_path.c_str();
+#endif
 
   int rc = obs_reset_video(&ovi);
+  blog(LOG_INFO, "obs_reset_video rc=%d (graphics_module=%s)", rc, ovi.graphics_module);
 
   if (rc == OBS_VIDEO_SUCCESS) {
     // Without this HDR doesn't work.
-    obs_set_video_levels(300.0f, 1000.0f); 
+    obs_set_video_levels(300.0f, 1000.0f);
   }
 
   return rc;
@@ -179,8 +192,28 @@ void ObsInterface::init_obs(const std::string& distPath) {
   }
 
   std::string effectsPath = basePath + "data/effects/";
+#ifdef __APPLE__
+  g_mac_graphics_module_path = basePath + "Frameworks/libobs-opengl.dylib";
+  blog(LOG_INFO, "Mac graphics module path: %s", g_mac_graphics_module_path.c_str());
+
+  // obs-ffmpeg-mux is resolved through PATH on macOS.
+  std::string frameworksPath = basePath + "Frameworks";
+  const char* currentPath = getenv("PATH");
+  std::string updatedPath = frameworksPath;
+  if (currentPath && currentPath[0] != '\0') {
+    updatedPath += ":";
+    updatedPath += currentPath;
+  }
+  setenv("PATH", updatedPath.c_str(), 1);
+  blog(LOG_INFO, "Mac PATH prefix for obs-ffmpeg-mux: %s", frameworksPath.c_str());
+#endif
+#ifdef _WIN32
   std::string pluginPath = basePath + "obs-plugins/";
   std::string pluginDataPath = basePath + "data/obs-plugins/";
+#elif defined(__APPLE__)
+  std::string pluginPath = basePath + "PlugIns/";
+  std::string pluginDataPath = basePath + "PlugIns/";
+#endif
 
   blog(LOG_INFO, "Base path: %s", basePath.c_str());
   blog(LOG_INFO, "Effects path: %s", effectsPath.c_str());
@@ -206,28 +239,46 @@ void ObsInterface::init_obs(const std::string& distPath) {
     throw std::runtime_error("Failed to reset audio!");
   }
 
-  std::vector<std::string> modules = { 
-    "obs-x264",     // Software encoder.
-    "obs-ffmpeg",   // Contains AMF (AMD) encoder support.
-    "win-capture",  // Required for basically all forms of capture on Windows.
-    "image-source", // Required for image sources.
-    "win-wasapi",   // Required for WASAPI audio input.
-    "obs-nvenc",    // Required for NVENC video encoding.
-    "obs-qsv11",    // Required for QSV video encoding.
-    "obs-filters"   // Required for audio filters.
+  struct ModuleEntry { const char* name; bool allowFail; };
+#ifdef _WIN32
+  std::vector<ModuleEntry> modules = {
+    { "obs-x264",     false }, // Software encoder.
+    { "obs-ffmpeg",   false }, // Contains AMF (AMD) encoder support.
+    { "win-capture",  false }, // Required for basically all forms of capture on Windows.
+    { "image-source", false }, // Required for image sources.
+    { "win-wasapi",   false }, // Required for WASAPI audio input.
+    { "obs-nvenc",    true  }, // NVENC fails if there is no NVENC hardware support.
+    { "obs-qsv11",    false }, // Required for QSV video encoding.
+    { "obs-filters",  false }, // Required for audio filters.
   };
+#elif defined(__APPLE__)
+  std::vector<ModuleEntry> modules = {
+    { "obs-x264",         false }, // Software H.264 encoder fallback.
+    { "obs-ffmpeg",       false }, // ffmpeg_muxer output, AAC encoder.
+    { "mac-capture",      false }, // screen_capture + coreaudio_input/output_capture sources.
+    { "image-source",     false }, // Required for image sources (chat overlay).
+    { "mac-videotoolbox", false }, // VT_H264 + VT_HEVC hardware encoders.
+    { "obs-filters",      false }, // Audio filters.
+  };
+#endif
 
-  for (const auto& module : modules) {
-    std::string modulePath = pluginPath + module + ".dll";
-    std::string moduleDataPath = pluginDataPath + module;
-
-    // NVENC fails if there is no NVENC hardware support.
-    bool allowFail = module == "obs-nvenc";
-    load_module(modulePath.c_str(), moduleDataPath.c_str(), allowFail);
+  for (const auto& m : modules) {
+#ifdef _WIN32
+    std::string modulePath = pluginPath + m.name + ".dll";
+    std::string moduleDataPath = pluginDataPath + m.name;
+#elif defined(__APPLE__)
+    std::string modulePath =
+      pluginPath + m.name + ".plugin/Contents/MacOS/" + m.name;
+    std::string moduleDataPath =
+      pluginPath + m.name + ".plugin/Contents/Resources";
+#endif
+    load_module(modulePath.c_str(), moduleDataPath.c_str(), m.allowFail);
   }
-  
+
   obs_post_load_modules();
+#ifdef _WIN32
   register_preview_window_class();
+#endif
 
   list_encoders();
   list_source_types();
