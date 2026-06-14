@@ -8,3 +8,10 @@ src/.cache
 src/compile_commands.json
 bin/win32-x64-116
 win-capture/
+.DS_Store
+
+# Generated macOS OBS runtime.
+Frameworks/
+PlugIns/
+data/
+vendor/
