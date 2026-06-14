@@ -986,14 +986,13 @@ ObsInterface::~ObsInterface() {
     obs_volmeter_detach_source(volmeter);
     obs_volmeter_destroy(volmeter);
     blog(LOG_INFO, "Volmeter deleted for source: %s", kv.first.c_str());
-    volmeters.erase(kv.first);
   }
+  volmeters.clear();
 
   for (auto& kv : volmeter_cb_ctx) {
-    SignalContext* ctx = kv.second;
-    delete ctx;
-    volmeter_cb_ctx.erase(kv.first);
+    delete kv.second;
   }
+  volmeter_cb_ctx.clear();
 
   delete starting_ctx;
   delete start_ctx;
@@ -1003,23 +1002,22 @@ ObsInterface::~ObsInterface() {
   delete deactivate_ctx;
 
   for (auto& kv : sources) {
-    std::string name = kv.first;
+    const std::string &name = kv.first;
     obs_source_t* source = kv.second;
 
     auto filter_it = filters.find(name);
-
     if (filter_it != filters.end()) {
       obs_source_t* filter = filter_it->second;
       obs_source_filter_remove(source, filter);
       obs_source_release(filter);
-      filters.erase(name);
       blog(LOG_INFO, "Filter removed for source: %s on shutdown", name.c_str());
     }
 
     blog(LOG_DEBUG, "Releasing source: %s", name.c_str());
     obs_source_release(source);
-    sources.erase(name);
   }
+  filters.clear();
+  sources.clear();
 
   if (scene) {
     blog(LOG_DEBUG, "Releasing scene");
