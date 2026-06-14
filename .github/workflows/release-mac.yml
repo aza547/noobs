@@ -1,0 +1,102 @@
+name: release-mac
+on:
+  push:
+    tags: ['v*-mac', 'v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15 # Apple Silicon runner
+    timeout-minutes: 120
+    permissions:
+      contents: write # softprops/action-gh-release needs to create releases
+
+    steps:
+      - name: checkout noobs
+        uses: actions/checkout@v4
+
+      - name: cache WCR OBS fork + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/warcraft-recorder-obs-studio
+          key: wcr-obs-${{ hashFiles('scripts/build-libobs-mac.sh') }}
+
+      # OBS 31.x expects the versioned SDK path.
+      - name: select Xcode 16.4 + versioned SDK
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          SDK_PATH="/Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.5.sdk"
+          if [ ! -d "$SDK_PATH" ]; then
+            echo "Versioned SDK not found at $SDK_PATH; available:"
+            ls /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/
+            exit 1
+          fi
+          echo "SDKROOT=$SDK_PATH" >> "$GITHUB_ENV"
+          echo "CMAKE_OSX_SYSROOT=$SDK_PATH" >> "$GITHUB_ENV"
+          echo "MACOSX_DEPLOYMENT_TARGET=12.0" >> "$GITHUB_ENV"
+          xcodebuild -version
+          uname -m
+          df -h
+
+      - name: install build deps
+        run: |
+          brew install cmake ninja jq ccache pkg-config
+          sudo xcodebuild -license accept || true
+
+      - name: build libobs + plugins (vendor into Frameworks/PlugIns)
+        env:
+          OBS_ROOT: ${{ github.workspace }}/vendor/warcraft-recorder-obs-studio
+        run: |
+          mkdir -p vendor
+          chmod +x scripts/build-libobs-mac.sh
+          df -h
+          ./scripts/build-libobs-mac.sh
+          df -h
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: install npm deps
+        run: npm ci
+
+      - name: build noobs.node + dist
+        run: npm run build
+
+      - name: pack tarball
+        run: npm pack
+
+      - name: rename tarball with platform/arch
+        id: pack
+        run: |
+          ORIG=$(ls noobs-*.tgz | head -1)
+          NEW="noobs-darwin-arm64-${ORIG#noobs-}"
+          mv "$ORIG" "$NEW"
+          echo "tarball=$NEW" >> $GITHUB_OUTPUT
+
+      - name: upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: noobs-darwin-arm64
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pack.outputs.tarball }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,14 +2,27 @@
 
 #include <obs.h>
 #include <napi.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
+#include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 #include <optional>
 
+// Per-platform source type ids.
+#ifdef _WIN32
 #define AUDIO_INPUT "wasapi_input_capture"
 #define AUDIO_OUTPUT "wasapi_output_capture"
 #define AUDIO_PROCESS "wasapi_process_output_capture"
+#elif defined(__APPLE__)
+#define AUDIO_INPUT "coreaudio_input_capture"
+#define AUDIO_OUTPUT "coreaudio_output_capture"
+#define AUDIO_PROCESS "sck_audio_capture"
+#else
+#error "Unsupported platform"
+#endif
 
 class ObsInterface;
 
@@ -51,6 +64,7 @@ class ObsInterface {
     void stopRecording(); // Stop the recording.
     void forceStopRecording(); // Force stop the recording, this will not save the current recording.
     std::string getLastRecording(); // Get the last recorded file path.
+    bool replayBufferConvertSupported(); // Whether replay_buffer exposes WCR's convert proc.
     void setBuffering(bool buffer); // Enable or disable buffering.
     void setRecordingCfg(const std::string& recordingPath, const std::string& fileExtension); // Set the recording path.
     void setVideoContext(int fps, int width, int height); // Reset video settings.
@@ -71,7 +85,8 @@ class ObsInterface {
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
-    void initPreview(HWND parent); // Must call this before showPreview to setup resources.
+    // HWND on Windows, NSView* on macOS.
+    void initPreview(uintptr_t parentHandle); // Must call this before showPreview to setup resources.
     void configurePreview(int x, int y, int width, int height); // Move and resize the preview display.
     void showPreview(); // Show the preview display.
     void hidePreview(); // Hide the preview display, but leave it running.
@@ -101,7 +116,10 @@ class ObsInterface {
     obs_encoder_t *audio_encoder = nullptr;
     
     obs_display_t *display = nullptr;
-    HWND preview_hwnd = nullptr; // window handle for scene preview
+    uintptr_t preview_handle = 0; // HWND on Windows, NSView* on macOS.
+    double preview_backing_scale = 1.0;
+    uintptr_t preview_parent_view = 0; // NSView*, non-owning.
+    uintptr_t preview_child_window = 0; // NSWindow*, retained.
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";
@@ -113,6 +131,7 @@ class ObsInterface {
     int reset_video(int fps, int width, int height);
     bool reset_audio();
     void load_module(const char* module, const char* data, bool allowFail); // Load a module, data is optional.
+    void destroyPreview();
     void connect_signal_handlers(obs_output_t *output);
     void disconnect_signal_handlers(obs_output_t *output);
 

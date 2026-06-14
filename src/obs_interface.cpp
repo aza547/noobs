@@ -1,7 +1,10 @@
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <obs.h>
 #include "utils.h"
 #include "obs_interface.h"
+#include <cstdlib>
 #include <vector>
 #include <string>
 #include <graphics/matrix4.h>
@@ -119,6 +122,10 @@ void ObsInterface::setVideoContext(int fps, int width, int height) {
   create_video_encoders();
 }
 
+#ifdef __APPLE__
+static std::string g_mac_graphics_module_path;
+#endif
+
 int ObsInterface::reset_video(int fps, int width, int height) {
   blog(LOG_INFO, "Reset video");
   obs_video_info ovi = {};
@@ -135,14 +142,22 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.range = VIDEO_RANGE_PARTIAL;
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
+  // macOS OpenGL needs the GPU conversion path for NV12 output.
   ovi.gpu_conversion = true;
-  ovi.graphics_module = "libobs-d3d11.dll"; 
+#ifdef _WIN32
+  ovi.graphics_module = "libobs-d3d11.dll";
+#elif defined(__APPLE__)
+  ovi.graphics_module = g_mac_graphics_module_path.empty()
+    ? "libobs-opengl.dylib"
+    : g_mac_graphics_module_path.c_str();
+#endif
 
   int rc = obs_reset_video(&ovi);
+  blog(LOG_INFO, "obs_reset_video rc=%d (graphics_module=%s)", rc, ovi.graphics_module);
 
   if (rc == OBS_VIDEO_SUCCESS) {
     // Without this HDR doesn't work.
-    obs_set_video_levels(300.0f, 1000.0f); 
+    obs_set_video_levels(300.0f, 1000.0f);
   }
 
   return rc;
@@ -177,8 +192,28 @@ void ObsInterface::init_obs(const std::string& distPath) {
   }
 
   std::string effectsPath = basePath + "data/effects/";
+#ifdef __APPLE__
+  g_mac_graphics_module_path = basePath + "Frameworks/libobs-opengl.dylib";
+  blog(LOG_INFO, "Mac graphics module path: %s", g_mac_graphics_module_path.c_str());
+
+  // obs-ffmpeg-mux is resolved through PATH on macOS.
+  std::string frameworksPath = basePath + "Frameworks";
+  const char* currentPath = getenv("PATH");
+  std::string updatedPath = frameworksPath;
+  if (currentPath && currentPath[0] != '\0') {
+    updatedPath += ":";
+    updatedPath += currentPath;
+  }
+  setenv("PATH", updatedPath.c_str(), 1);
+  blog(LOG_INFO, "Mac PATH prefix for obs-ffmpeg-mux: %s", frameworksPath.c_str());
+#endif
+#ifdef _WIN32
   std::string pluginPath = basePath + "obs-plugins/";
   std::string pluginDataPath = basePath + "data/obs-plugins/";
+#elif defined(__APPLE__)
+  std::string pluginPath = basePath + "PlugIns/";
+  std::string pluginDataPath = basePath + "PlugIns/";
+#endif
 
   blog(LOG_INFO, "Base path: %s", basePath.c_str());
   blog(LOG_INFO, "Effects path: %s", effectsPath.c_str());
@@ -204,28 +239,46 @@ void ObsInterface::init_obs(const std::string& distPath) {
     throw std::runtime_error("Failed to reset audio!");
   }
 
-  std::vector<std::string> modules = { 
-    "obs-x264",     // Software encoder.
-    "obs-ffmpeg",   // Contains AMF (AMD) encoder support.
-    "win-capture",  // Required for basically all forms of capture on Windows.
-    "image-source", // Required for image sources.
-    "win-wasapi",   // Required for WASAPI audio input.
-    "obs-nvenc",    // Required for NVENC video encoding.
-    "obs-qsv11",    // Required for QSV video encoding.
-    "obs-filters"   // Required for audio filters.
+  struct ModuleEntry { const char* name; bool allowFail; };
+#ifdef _WIN32
+  std::vector<ModuleEntry> modules = {
+    { "obs-x264",     false }, // Software encoder.
+    { "obs-ffmpeg",   false }, // Contains AMF (AMD) encoder support.
+    { "win-capture",  false }, // Required for basically all forms of capture on Windows.
+    { "image-source", false }, // Required for image sources.
+    { "win-wasapi",   false }, // Required for WASAPI audio input.
+    { "obs-nvenc",    true  }, // NVENC fails if there is no NVENC hardware support.
+    { "obs-qsv11",    false }, // Required for QSV video encoding.
+    { "obs-filters",  false }, // Required for audio filters.
   };
+#elif defined(__APPLE__)
+  std::vector<ModuleEntry> modules = {
+    { "obs-x264",         false }, // Software H.264 encoder fallback.
+    { "obs-ffmpeg",       false }, // ffmpeg_muxer output, AAC encoder.
+    { "mac-capture",      false }, // screen_capture + coreaudio_input/output_capture sources.
+    { "image-source",     false }, // Required for image sources (chat overlay).
+    { "mac-videotoolbox", false }, // VT_H264 + VT_HEVC hardware encoders.
+    { "obs-filters",      false }, // Audio filters.
+  };
+#endif
 
-  for (const auto& module : modules) {
-    std::string modulePath = pluginPath + module + ".dll";
-    std::string moduleDataPath = pluginDataPath + module;
-
-    // NVENC fails if there is no NVENC hardware support.
-    bool allowFail = module == "obs-nvenc";
-    load_module(modulePath.c_str(), moduleDataPath.c_str(), allowFail);
+  for (const auto& m : modules) {
+#ifdef _WIN32
+    std::string modulePath = pluginPath + m.name + ".dll";
+    std::string moduleDataPath = pluginDataPath + m.name;
+#elif defined(__APPLE__)
+    std::string modulePath =
+      pluginPath + m.name + ".plugin/Contents/MacOS/" + m.name;
+    std::string moduleDataPath =
+      pluginPath + m.name + ".plugin/Contents/Resources";
+#endif
+    load_module(modulePath.c_str(), moduleDataPath.c_str(), m.allowFail);
   }
-  
+
   obs_post_load_modules();
+#ifdef _WIN32
   register_preview_window_class();
+#endif
 
   list_encoders();
   list_source_types();
@@ -266,7 +319,12 @@ void ObsInterface::create_output() {
   } else {
     blog(LOG_INFO, "Set ffmpeg_muxer settings");
     // Need to specify the exact path for ffmpeg_muxer. We will write this again at start recording.
-    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
+#ifdef _WIN32
+    const char path_sep = '\\';
+#else
+    const char path_sep = '/';
+#endif
+    std::string filename = recording_path + path_sep + get_current_date_time() + "." + file_extension;
     obs_data_set_string(settings, "path", filename.c_str());
     unbuffered_output_filename = filename;
   }
@@ -765,8 +823,12 @@ void draw_callback(void* data, uint32_t cx, uint32_t cy) {
   }
 }
 
-void ObsInterface::initPreview(HWND parent) {
+#ifdef _WIN32
+void ObsInterface::initPreview(uintptr_t parentHandle) {
   blog(LOG_INFO, "ObsInterface::initPreview");
+
+  HWND parent = reinterpret_cast<HWND>(parentHandle);
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
 
   if (!preview_hwnd) {
     blog(LOG_INFO, "Creating preview child window");
@@ -799,6 +861,8 @@ void ObsInterface::initPreview(HWND parent) {
     LONG_PTR exStyle = GetWindowLongPtr(preview_hwnd, GWL_EXSTYLE);
     exStyle |= WS_EX_TRANSPARENT;
     SetWindowLongPtr(preview_hwnd, GWL_EXSTYLE, exStyle);
+
+    preview_handle = reinterpret_cast<uintptr_t>(preview_hwnd);
   }
 
   if (!display) {
@@ -828,6 +892,8 @@ void ObsInterface::initPreview(HWND parent) {
 
 void ObsInterface::configurePreview(int x, int y, int width, int height) {
   blog(LOG_INFO, "ObsInterface::configurePreview");
+
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
 
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
@@ -862,6 +928,8 @@ void ObsInterface::configurePreview(int x, int y, int width, int height) {
 void ObsInterface::showPreview() {
   blog(LOG_INFO, "ObsInterface::showPreview");
 
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
+
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
     return;
@@ -879,12 +947,30 @@ void ObsInterface::showPreview() {
 void ObsInterface::hidePreview() {
   blog(LOG_INFO, "ObsInterface::hidePreview");
 
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
+
   if (preview_hwnd) {
     ShowWindow(preview_hwnd, SW_HIDE);
     blog(LOG_INFO, "Preview child window hidden");
   }
 }
 
+void ObsInterface::destroyPreview() {
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
+
+  if (display) {
+    obs_display_remove_draw_callback(display, draw_callback, this);
+    obs_display_destroy(display);
+    display = nullptr;
+  }
+
+  if (preview_hwnd) {
+    DestroyWindow(preview_hwnd);
+    preview_handle = 0;
+  }
+}
+#endif
+#ifndef __APPLE__
 void ObsInterface::disablePreview() {
   blog(LOG_INFO, "ObsInterface::disablePreview");
 
@@ -896,6 +982,7 @@ void ObsInterface::disablePreview() {
   hidePreview();
   obs_display_set_enabled(display, false);
 }
+#endif
 
 PreviewInfo ObsInterface::getPreviewInfo() {
   if (!display) {
@@ -908,6 +995,14 @@ PreviewInfo ObsInterface::getPreviewInfo() {
 
   uint32_t width, height;
 	obs_display_size(display, &width, &height);
+
+#ifdef __APPLE__
+  // macOS display size is reported in backing pixels.
+  if (preview_backing_scale > 0.0) {
+    width = static_cast<uint32_t>(width / preview_backing_scale);
+    height = static_cast<uint32_t>(height / preview_backing_scale);
+  }
+#endif
 
   PreviewInfo info = {
     ovi.base_width,
@@ -960,20 +1055,21 @@ ObsInterface::ObsInterface(
 ObsInterface::~ObsInterface() {
   blog(LOG_DEBUG, "Shutting down");
 
+  destroyPreview();
+
   for (auto& kv : volmeters) {
     obs_volmeter_t* volmeter = kv.second;
     obs_volmeter_remove_callback(volmeter, volmeter_callback, this);
     obs_volmeter_detach_source(volmeter);
     obs_volmeter_destroy(volmeter);
     blog(LOG_INFO, "Volmeter deleted for source: %s", kv.first.c_str());
-    volmeters.erase(kv.first);
   }
+  volmeters.clear();
 
   for (auto& kv : volmeter_cb_ctx) {
-    SignalContext* ctx = kv.second;
-    delete ctx;
-    volmeter_cb_ctx.erase(kv.first);
+    delete kv.second;
   }
+  volmeter_cb_ctx.clear();
 
   delete starting_ctx;
   delete start_ctx;
@@ -983,23 +1079,22 @@ ObsInterface::~ObsInterface() {
   delete deactivate_ctx;
 
   for (auto& kv : sources) {
-    std::string name = kv.first;
+    const std::string &name = kv.first;
     obs_source_t* source = kv.second;
 
     auto filter_it = filters.find(name);
-
     if (filter_it != filters.end()) {
       obs_source_t* filter = filter_it->second;
       obs_source_filter_remove(source, filter);
       obs_source_release(filter);
-      filters.erase(name);
       blog(LOG_INFO, "Filter removed for source: %s on shutdown", name.c_str());
     }
 
     blog(LOG_DEBUG, "Releasing source: %s", name.c_str());
     obs_source_release(source);
-    sources.erase(name);
   }
+  filters.clear();
+  sources.clear();
 
   if (scene) {
     blog(LOG_DEBUG, "Releasing scene");
@@ -1107,7 +1202,12 @@ void ObsInterface::startRecording(int offset) {
     }
   } else {
     obs_data_t *ffmpeg_settings = obs_data_create();
-    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
+#ifdef _WIN32
+    const char path_sep = '\\';
+#else
+    const char path_sep = '/';
+#endif
+    std::string filename = recording_path + path_sep + get_current_date_time() + "." + file_extension;
     obs_data_set_string(ffmpeg_settings,  "path", filename.c_str());
     obs_output_update(output, ffmpeg_settings);
     obs_data_release(ffmpeg_settings);
@@ -1159,6 +1259,35 @@ void ObsInterface::forceStopRecording() {
 
   obs_output_force_stop(output);
   blog(LOG_INFO, "ObsInterface::forceStopRecording exited");
+}
+
+bool ObsInterface::replayBufferConvertSupported() {
+  blog(LOG_INFO, "Checking replay buffer convert procedure support");
+
+  obs_output_t *probe = obs_output_create(
+    "replay_buffer",
+    "Replay Buffer Convert Probe",
+    NULL,
+    NULL
+  );
+
+  if (!probe) {
+    blog(LOG_WARNING, "Could not create replay_buffer output for convert probe");
+    return false;
+  }
+
+  calldata cd;
+  calldata_init(&cd);
+  calldata_set_int(&cd, "offset_seconds", 0);
+
+  proc_handler_t *ph = obs_output_get_proc_handler(probe);
+  bool supported = proc_handler_call(ph, "convert", &cd);
+
+  calldata_free(&cd);
+  obs_output_release(probe);
+
+  blog(LOG_INFO, "Replay buffer convert procedure support: %d", supported);
+  return supported;
 }
 
 std::string ObsInterface::getLastRecording() {
