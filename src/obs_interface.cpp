@@ -954,8 +954,23 @@ void ObsInterface::hidePreview() {
     blog(LOG_INFO, "Preview child window hidden");
   }
 }
-#endif
 
+void ObsInterface::destroyPreview() {
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
+
+  if (display) {
+    obs_display_remove_draw_callback(display, draw_callback, this);
+    obs_display_destroy(display);
+    display = nullptr;
+  }
+
+  if (preview_hwnd) {
+    DestroyWindow(preview_hwnd);
+    preview_handle = 0;
+  }
+}
+#endif
+#ifndef __APPLE__
 void ObsInterface::disablePreview() {
   blog(LOG_INFO, "ObsInterface::disablePreview");
 
@@ -967,6 +982,7 @@ void ObsInterface::disablePreview() {
   hidePreview();
   obs_display_set_enabled(display, false);
 }
+#endif
 
 PreviewInfo ObsInterface::getPreviewInfo() {
   if (!display) {
@@ -979,6 +995,14 @@ PreviewInfo ObsInterface::getPreviewInfo() {
 
   uint32_t width, height;
 	obs_display_size(display, &width, &height);
+
+#ifdef __APPLE__
+  // macOS display size is reported in backing pixels.
+  if (preview_backing_scale > 0.0) {
+    width = static_cast<uint32_t>(width / preview_backing_scale);
+    height = static_cast<uint32_t>(height / preview_backing_scale);
+  }
+#endif
 
   PreviewInfo info = {
     ovi.base_width,
@@ -1030,6 +1054,8 @@ ObsInterface::ObsInterface(
 
 ObsInterface::~ObsInterface() {
   blog(LOG_DEBUG, "Shutting down");
+
+  destroyPreview();
 
   for (auto& kv : volmeters) {
     obs_volmeter_t* volmeter = kv.second;

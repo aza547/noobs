@@ -84,8 +84,7 @@ class ObsInterface {
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
-    // Native preview parent handle. Windows passes an HWND; other
-    // platforms can map the same API boundary to their native view type.
+    // HWND on Windows, NSView* on macOS.
     void initPreview(uintptr_t parentHandle); // Must call this before showPreview to setup resources.
     void configurePreview(int x, int y, int width, int height); // Move and resize the preview display.
     void showPreview(); // Show the preview display.
@@ -116,7 +115,10 @@ class ObsInterface {
     obs_encoder_t *audio_encoder = nullptr;
     
     obs_display_t *display = nullptr;
-    uintptr_t preview_handle = 0; // Native preview child handle; HWND on Windows.
+    uintptr_t preview_handle = 0; // HWND on Windows, NSView* on macOS.
+    double preview_backing_scale = 1.0;
+    uintptr_t preview_parent_view = 0; // NSView*, non-owning.
+    uintptr_t preview_child_window = 0; // NSWindow*, retained.
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";
@@ -128,6 +130,7 @@ class ObsInterface {
     int reset_video(int fps, int width, int height);
     bool reset_audio();
     void load_module(const char* module, const char* data, bool allowFail); // Load a module, data is optional.
+    void destroyPreview();
     void connect_signal_handlers(obs_output_t *output);
     void disconnect_signal_handlers(obs_output_t *output);
 
