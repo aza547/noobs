@@ -19,50 +19,52 @@ const addonSrc = path.resolve(__dirname, 'build', 'Release', packageName);
 const addonDest = path.join(distRoot, packageName);
 fs.copyFileSync(addonSrc, addonDest);
 
-// Now copy the .dll files we need.
-const binSrc = path.resolve(__dirname, 'bin', '64bit');
-const binDst = path.resolve(__dirname, 'dist', 'bin');
+if (process.platform === 'win32') {
+  // Now copy the .dll files we need.
+  const binSrc = path.resolve(__dirname, 'bin', '64bit');
+  const binDst = path.resolve(__dirname, 'dist', 'bin');
 
-fs.readdirSync(binSrc)
-  .filter((file) => file.endsWith('.dll'))
-  .forEach((file) => {
-    const src = path.join(binSrc, file);
-    const dst = path.join(binDst, file);
-    fs.copyFileSync(src, dst);
-  });
+  fs.readdirSync(binSrc)
+    .filter((file) => file.endsWith('.dll'))
+    .forEach((file) => {
+      const src = path.join(binSrc, file);
+      const dst = path.join(binDst, file);
+      fs.copyFileSync(src, dst);
+    });
 
   // Copy executable files required.
-const exeFiles = [
-  'obs-ffmpeg-mux.exe', // Required for any sort of recording.
-  'obs-amf-test.exe',   // For getting AMF encoding capabilities.
-  'obs-nvenc-test.exe', // For getting NVENC encoding capabilities.
-  'obs-qsv-test.exe',    // For getting QSV encoding capabilities.
-  'ffmpeg.exe', // Dynamically linked ffmpeg exe.
-  'ffprobe.exe' // Dynamically linked ffprobe exe.
-];
+  const exeFiles = [
+    'obs-ffmpeg-mux.exe', // Required for any sort of recording.
+    'obs-amf-test.exe',   // For getting AMF encoding capabilities.
+    'obs-nvenc-test.exe', // For getting NVENC encoding capabilities.
+    'obs-qsv-test.exe',    // For getting QSV encoding capabilities.
+    'ffmpeg.exe', // Dynamically linked ffmpeg exe.
+    'ffprobe.exe' // Dynamically linked ffprobe exe.
+  ];
 
-exeFiles.forEach((file) => {
-  const srcPath = path.resolve(__dirname, 'bin', '64bit', file);
-  const destPath = path.resolve(__dirname, 'dist', 'bin', file);
-  fs.copyFileSync(srcPath, destPath);
-});
+  exeFiles.forEach((file) => {
+    const srcPath = path.resolve(__dirname, 'bin', '64bit', file);
+    const destPath = path.resolve(__dirname, 'dist', 'bin', file);
+    fs.copyFileSync(srcPath, destPath);
+  });
 
-// Copy plugins themselves.
-const pluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins');
-const pluginDst = path.resolve(__dirname, 'dist', 'obs-plugins');
+  // Copy plugins themselves.
+  const pluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins');
+  const pluginDst = path.resolve(__dirname, 'dist', 'obs-plugins');
 
-fs.cpSync(pluginSrc, pluginDst, { 
-  recursive: true ,  
-  filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
-});
+  fs.cpSync(pluginSrc, pluginDst, {
+    recursive: true ,
+    filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
+  });
 
-// Copy data, including effects and plugin data.
-const dataSrc = path.resolve(__dirname, 'bin', 'data');
-const dataDst = path.resolve(__dirname, 'dist', 'data');
+  // Copy data, including effects and plugin data.
+  const dataSrc = path.resolve(__dirname, 'bin', 'data');
+  const dataDst = path.resolve(__dirname, 'dist', 'data');
 
-fs.cpSync(dataSrc, dataDst, { 
-  recursive: true,  
-  filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
-});
-
-
+  fs.cpSync(dataSrc, dataDst, {
+    recursive: true,
+    filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
+  });
+} else {
+  console.warn('[dist] platform not supported:', process.platform);
+}

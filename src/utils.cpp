@@ -6,7 +6,9 @@
 #include <sstream>
 #include <mutex>
 #include "utils.h"
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
   static std::mutex logMutex;
@@ -388,10 +390,11 @@ std::string get_current_date_time() {
     return ss.str();
 }
 
+#ifdef _WIN32
 LRESULT CALLBACK DisplayWndProc(
-  _In_ HWND hwnd, 
-  _In_ UINT uMsg, 
-  _In_ WPARAM wParam, 
+  _In_ HWND hwnd,
+  _In_ UINT uMsg,
+  _In_ WPARAM wParam,
   _In_ LPARAM lParam)
 {
 	switch (uMsg) {
@@ -425,3 +428,4 @@ void register_preview_window_class() {
 
   blog(LOG_INFO, "Registered preview window class");
 }
+#endif

@@ -1,13 +1,20 @@
 #include <napi.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <obs.h>
 #include "obs_interface.h"
 #include "utils.h"
 
 ObsInterface* obs = nullptr;
 
+#ifdef _WIN32
+// GPU vendor hints: Windows hybrid-GPU laptops route the process to the
+// dGPU when these symbols are exported. No equivalent exists on other
+// platforms.
 extern "C" __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
 
 Napi::Value ObsInit(const Napi::CallbackInfo& info) {
   bool valid = info.Length() == 3 &&
@@ -237,13 +244,13 @@ Napi::Value ObsInitPreview(const Napi::CallbackInfo& info) {
 
   Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
 
-  if (buffer.Length() < sizeof(HWND)) {
-    Napi::TypeError::New(info.Env(), "Buffer too small for HWND").ThrowAsJavaScriptException();
+  if (buffer.Length() < sizeof(uintptr_t)) {
+    Napi::TypeError::New(info.Env(), "Buffer too small for native window handle").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
 
-  HWND hwnd = *reinterpret_cast<HWND*>(buffer.Data());
-  obs->initPreview(hwnd);
+  uintptr_t handle = *reinterpret_cast<uintptr_t*>(buffer.Data());
+  obs->initPreview(handle);
   return info.Env().Undefined();
 }
 

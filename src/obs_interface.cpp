@@ -1,4 +1,6 @@
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <obs.h>
 #include "utils.h"
 #include "obs_interface.h"
@@ -765,8 +767,12 @@ void draw_callback(void* data, uint32_t cx, uint32_t cy) {
   }
 }
 
-void ObsInterface::initPreview(HWND parent) {
+#ifdef _WIN32
+void ObsInterface::initPreview(uintptr_t parentHandle) {
   blog(LOG_INFO, "ObsInterface::initPreview");
+
+  HWND parent = reinterpret_cast<HWND>(parentHandle);
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
 
   if (!preview_hwnd) {
     blog(LOG_INFO, "Creating preview child window");
@@ -799,6 +805,8 @@ void ObsInterface::initPreview(HWND parent) {
     LONG_PTR exStyle = GetWindowLongPtr(preview_hwnd, GWL_EXSTYLE);
     exStyle |= WS_EX_TRANSPARENT;
     SetWindowLongPtr(preview_hwnd, GWL_EXSTYLE, exStyle);
+
+    preview_handle = reinterpret_cast<uintptr_t>(preview_hwnd);
   }
 
   if (!display) {
@@ -828,6 +836,8 @@ void ObsInterface::initPreview(HWND parent) {
 
 void ObsInterface::configurePreview(int x, int y, int width, int height) {
   blog(LOG_INFO, "ObsInterface::configurePreview");
+
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
 
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
@@ -862,6 +872,8 @@ void ObsInterface::configurePreview(int x, int y, int width, int height) {
 void ObsInterface::showPreview() {
   blog(LOG_INFO, "ObsInterface::showPreview");
 
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
+
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
     return;
@@ -879,11 +891,14 @@ void ObsInterface::showPreview() {
 void ObsInterface::hidePreview() {
   blog(LOG_INFO, "ObsInterface::hidePreview");
 
+  HWND preview_hwnd = reinterpret_cast<HWND>(preview_handle);
+
   if (preview_hwnd) {
     ShowWindow(preview_hwnd, SW_HIDE);
     blog(LOG_INFO, "Preview child window hidden");
   }
 }
+#endif
 
 void ObsInterface::disablePreview() {
   blog(LOG_INFO, "ObsInterface::disablePreview");

@@ -2,7 +2,10 @@
 
 #include <obs.h>
 #include <napi.h>
+#ifdef _WIN32
 #include <windows.h>
+#endif
+#include <cstdint>
 #include <map>
 #include <string>
 #include <optional>
@@ -71,7 +74,9 @@ class ObsInterface {
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
-    void initPreview(HWND parent); // Must call this before showPreview to setup resources.
+    // Native preview parent handle. Windows passes an HWND; other
+    // platforms can map the same API boundary to their native view type.
+    void initPreview(uintptr_t parentHandle); // Must call this before showPreview to setup resources.
     void configurePreview(int x, int y, int width, int height); // Move and resize the preview display.
     void showPreview(); // Show the preview display.
     void hidePreview(); // Hide the preview display, but leave it running.
@@ -101,7 +106,7 @@ class ObsInterface {
     obs_encoder_t *audio_encoder = nullptr;
     
     obs_display_t *display = nullptr;
-    HWND preview_hwnd = nullptr; // window handle for scene preview
+    uintptr_t preview_handle = 0; // Native preview child handle; HWND on Windows.
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";
