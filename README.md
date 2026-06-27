@@ -93,6 +93,8 @@ npm run build     # compile it
 
 npm version patch # version bump
 npm pack          # build tgz locally
+
+npm login
 npm publish       # publish to npm
 ```
 
