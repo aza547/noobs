@@ -52,6 +52,7 @@ class ObsInterface {
     void forceStopRecording(); // Force stop the recording, this will not save the current recording.
     std::string getLastRecording(); // Get the last recorded file path.
     void setBuffering(bool buffer); // Enable or disable buffering.
+    void setFragmentation(bool fragmented); // Enable or disable fragmented MP4.
     void setRecordingCfg(const std::string& recordingPath, const std::string& fileExtension); // Set the recording path.
     void setVideoContext(int fps, int width, int height); // Reset video settings.
 
@@ -108,6 +109,7 @@ class ObsInterface {
     std::string file_extension = "mp4"; // File extension for recordings.
 
     bool buffering = false; // Whether we are buffering the recording in memory.
+    bool fragmented = false; // Use fragmented MP4.
     bool drawSourceOutline = false; // Draw red outline around source
     void init_obs(const std::string& distPath);
     int reset_video(int fps, int width, int height);

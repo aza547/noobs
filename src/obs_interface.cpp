@@ -271,6 +271,12 @@ void ObsInterface::create_output() {
     unbuffered_output_filename = filename;
   }
 
+  if (fragmented && file_extension == "mp4") {
+    blog(LOG_INFO, "Fragmentation enabled");
+    std::string mux_frag = "movflags=frag_keyframe+empty_moov+delay_moov";
+    obs_data_set_string(settings, "muxer_settings", mux_frag.c_str());
+  }
+
   obs_output_update(output, settings);
   obs_data_release(settings);
   connect_signal_handlers(output);
@@ -1044,6 +1050,16 @@ void ObsInterface::setBuffering(bool value) {
   }
 
   buffering = value;
+  create_output();
+}
+
+void ObsInterface::setFragmentation(bool value) {
+  if (obs_output_active(output)) {
+    blog(LOG_ERROR, "Cannot change fragmentation state while output is active");
+    throw new std::runtime_error("Cannot change fragmentation state while output is active");
+  }
+
+  fragmented = value;
   create_output();
 }
 
