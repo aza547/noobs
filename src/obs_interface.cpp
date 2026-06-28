@@ -605,7 +605,7 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
 
   if (ctx->id == "converted") {
     blog(LOG_INFO, "1111");
-    const char *path = calldata_string(cd, "path");
+    const char *path = calldata_string(cd, "file");
     blog(LOG_INFO, "2222 %s", path);
 
     sd = new SignalData{ 
