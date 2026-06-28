@@ -23,6 +23,10 @@ void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
     obj.Set("error", Napi::String::New(env, sd->error.value()));
   }
 
+  if (sd->path.has_value()) {
+    obj.Set("path", Napi::String::New(env, sd->path.value()));
+  }
+
   cb.Call({ obj });
   delete sd;
 }
