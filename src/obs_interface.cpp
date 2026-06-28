@@ -608,9 +608,7 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
   blog(LOG_INFO, "Handling %s signal from libobs", ctx->id.c_str());
 
   if (ctx->id == "converted") {
-    blog(LOG_INFO, "1111");
     const char *path = calldata_string(cd, "file");
-    blog(LOG_INFO, "2222 %s", path);
 
     sd = new SignalData{ 
       "output", 
@@ -620,7 +618,6 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
       std::nullopt, // Never expect errors here.
       std::string(path),
     };
-    blog(LOG_INFO, "3333");
   } else {
     long long code = calldata_int(cd, "code");
     const char *err = calldata_string(cd, "last_error");
@@ -639,9 +636,7 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
     };
   }
 
-  blog(LOG_INFO, "444");
   self->jscb.NonBlockingCall(sd, call_jscb);
-  blog(LOG_INFO, "555");
 }
 
 void ObsInterface::connect_signal_handlers(obs_output_t *output) {
