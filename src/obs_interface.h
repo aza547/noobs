@@ -19,6 +19,7 @@ struct SignalData {
   long long code;
   std::optional<float> value;
   std::optional<std::string> error;
+  std::optional<std::string> path; // used by converted signal handler
 };
 
 struct SignalContext {
@@ -124,6 +125,7 @@ class ObsInterface {
     SignalContext* stop_ctx;
     SignalContext* activate_ctx;
     SignalContext* deactivate_ctx;
+    SignalContext* converted_ctx;
     static void output_signal_handler(void *data, calldata_t *cd);
 
     void list_encoders(obs_encoder_type type = OBS_ENCODER_VIDEO);

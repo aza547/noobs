@@ -597,25 +597,38 @@ obs_properties_t* ObsInterface::getSourceProperties(std::string name) {
 }
 
 void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
-  long long code = calldata_int(cd, "code");
-  const char *err = calldata_string(cd, "last_error");
-
-  std::optional<std::string> error;
-
-  if (err) {
-    error = std::string(err);
-  }
-
   SignalContext* ctx = static_cast<SignalContext*>(data);
   ObsInterface* self = ctx->self;
+  SignalData* sd;
 
-  SignalData* sd = new SignalData{ 
-    "output", 
-    ctx->id.c_str(), 
-    code, 
-    std::nullopt, // No value, that's only used for volmeters.
-    error,
-  };
+  if (ctx->id == "converted") {
+    const char *path = calldata_string(cd, "path");
+
+    sd = new SignalData{ 
+      "output", 
+      ctx->id.c_str(), 
+      0, // Never actually get a code for a converted signal, so just set it to 0.
+      std::nullopt, // No value, that's only used for volmeters.
+      std::nullopt, // Never expect errors here.
+      path,
+    };
+  } else {
+    long long code = calldata_int(cd, "code");
+    const char *err = calldata_string(cd, "last_error");
+    std::optional<std::string> error;
+
+    if (err) {
+      error = std::string(err);
+    }
+
+    sd = new SignalData{ 
+      "output", 
+      ctx->id.c_str(), 
+      code, 
+      std::nullopt, // No value, that's only used for volmeters.
+      error,
+    };
+  }
 
   self->jscb.NonBlockingCall(sd, call_jscb);
 }
@@ -628,6 +641,7 @@ void ObsInterface::connect_signal_handlers(obs_output_t *output) {
   signal_handler_connect(sh, "stop", output_signal_handler,  stop_ctx);
   signal_handler_connect(sh, "activate", output_signal_handler, activate_ctx);
   signal_handler_connect(sh, "deactivate", output_signal_handler, deactivate_ctx);
+  signal_handler_connect(sh, "converted", output_signal_handler, converted_ctx);
 }
 
 void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
@@ -637,7 +651,8 @@ void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
   signal_handler_disconnect(sh, "stopping", output_signal_handler,  stopping_ctx);
   signal_handler_disconnect(sh, "stop", output_signal_handler,  stop_ctx);
   signal_handler_disconnect(sh, "activate", output_signal_handler, activate_ctx);
-  signal_handler_disconnect(sh, "deactivate ", output_signal_handler, deactivate_ctx);
+  signal_handler_disconnect(sh, "deactivate", output_signal_handler, deactivate_ctx);
+  signal_handler_disconnect(sh, "converted ", output_signal_handler, converted_ctx);
 }
 
 bool draw_source_outline(obs_scene_t *scene, obs_sceneitem_t *item, void *p) {
@@ -955,6 +970,7 @@ ObsInterface::ObsInterface(
   stop_ctx = new SignalContext{ this, "stop" };
   activate_ctx = new SignalContext{this, "activate"};
   deactivate_ctx = new SignalContext{this, "deactivate"};
+  converted_ctx = new SignalContext{this, "converted"};
 
   // Create the resources we rely on.
   create_scene();
@@ -987,6 +1003,7 @@ ObsInterface::~ObsInterface() {
   delete stop_ctx;
   delete activate_ctx;
   delete deactivate_ctx;
+  delete converted_ctx;
 
   for (auto& kv : sources) {
     std::string name = kv.first;
