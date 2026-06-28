@@ -608,11 +608,11 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
 
     sd = new SignalData{ 
       "output", 
-      ctx->id.c_str(), 
+      "converted", 
       0, // Never actually get a code for a converted signal, so just set it to 0.
       std::nullopt, // No value, that's only used for volmeters.
       std::nullopt, // Never expect errors here.
-      path,
+      std::string(path),
     };
   } else {
     long long code = calldata_int(cd, "code");
