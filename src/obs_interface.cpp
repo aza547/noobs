@@ -602,6 +602,7 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
   SignalData* sd;
 
   if (ctx->id == "converted") {
+    blog(LOG_INFO, "Converted signal received");
     const char *path = calldata_string(cd, "path");
 
     sd = new SignalData{ 
