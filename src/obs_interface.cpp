@@ -601,8 +601,9 @@ void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
   ObsInterface* self = ctx->self;
   SignalData* sd;
 
+  blog(LOG_INFO, "Handling %s signal from libobs", ctx->id.c_str());
+
   if (ctx->id == "converted") {
-    blog(LOG_INFO, "Converted signal received");
     const char *path = calldata_string(cd, "path");
 
     sd = new SignalData{ 
