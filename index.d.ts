@@ -140,6 +140,7 @@ export type Signal = {
   id: string; // Signal identifier, e.g. "stop"
   code: number; // 0 for success, other values for errors
   value?: number; // Currently only used for volmeters.
+  path?: string; // Set on the "converted" output signal for the on-disk recording file.
 };
 
 export type SceneItemPosition = {
