@@ -165,6 +165,28 @@ Napi::Value ObsSetBuffering(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+Napi::Value ObsSetFragmentation(const Napi::CallbackInfo& info) {
+  blog(LOG_INFO, "ObsSetFragmentation called");
+
+  if (!obs) {
+    blog(LOG_ERROR, "ObsSetFragmentation called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool valid = info.Length() == 1 && info[0].IsBoolean();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetFragmentation").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool fragmented = info[0].As<Napi::Boolean>().Value();
+  obs->setFragmentation(fragmented);
+
+  return info.Env().Undefined();
+}
+
 Napi::Value ObsStartBuffer(const Napi::CallbackInfo& info) {
   blog(LOG_INFO, "ObsStartBuffer called");
 
@@ -735,6 +757,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("SetVideoEncoder", Napi::Function::New(env, ObsSetVideoEncoder));
 
   exports.Set("SetBuffering", Napi::Function::New(env, ObsSetBuffering));
+  exports.Set("SetFragmentation", Napi::Function::New(env, ObsSetFragmentation));
   exports.Set("StartBuffer", Napi::Function::New(env, ObsStartBuffer));
   exports.Set("StartRecording", Napi::Function::New(env, ObsStartRecording));
   exports.Set("StopRecording", Napi::Function::New(env, ObsStopRecording));

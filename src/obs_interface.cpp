@@ -47,6 +47,10 @@ void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
     obj.Set("error", Napi::String::New(env, sd->error.value()));
   }
 
+  if (sd->path.has_value()) {
+    obj.Set("path", Napi::String::New(env, sd->path.value()));
+  }
+
   cb.Call({ obj });
   delete sd;
 }
@@ -336,6 +340,12 @@ void ObsInterface::create_output() {
     std::string filename = filepath.string();
     obs_data_set_string(settings, "path", filename.c_str());
     unbuffered_output_filename = filename;
+  }
+
+  if (fragmented && file_extension == "mp4") {
+    blog(LOG_INFO, "Fragmentation enabled");
+    std::string mux_frag = "movflags=frag_keyframe+empty_moov+delay_moov";
+    obs_data_set_string(settings, "muxer_settings", mux_frag.c_str());
   }
 
   obs_output_update(output, settings);
@@ -661,29 +671,44 @@ obs_properties_t* ObsInterface::getSourceProperties(std::string name) {
 }
 
 void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
-
-  auto *ctx  = static_cast<SignalContext*>(data);
-  auto *self = ctx->self;
+  SignalContext* ctx = static_cast<SignalContext*>(data);
+  ObsInterface* self = ctx->self;
 
   if (self->is_shutting_down())
     return;
 
-  long long code = calldata_int(cd, "code");
-  const char *err = calldata_string(cd, "last_error");
+  SignalData* sd;
 
-  std::optional<std::string> error;
+  blog(LOG_INFO, "Handling %s signal from libobs", ctx->id.c_str());
 
-  if (err) {
-    error = std::string(err);
+  if (ctx->id == "converted") {
+    const char *path = calldata_string(cd, "file");
+
+    sd = new SignalData{ 
+      "output", 
+      "converted", 
+      0, // Never actually get a code for a converted signal, so just set it to 0.
+      std::nullopt, // No value, that's only used for volmeters.
+      std::nullopt, // Never expect errors here.
+      std::string(path),
+    };
+  } else {
+    long long code = calldata_int(cd, "code");
+    const char *err = calldata_string(cd, "last_error");
+    std::optional<std::string> error;
+
+    if (err) {
+      error = std::string(err);
+    }
+
+    sd = new SignalData{ 
+      "output", 
+      ctx->id.c_str(), 
+      code, 
+      std::nullopt, // No value, that's only used for volmeters.
+      error,
+    };
   }
-
-  SignalData* sd = new SignalData{ 
-    "output", 
-    ctx->id.c_str(), 
-    code, 
-    std::nullopt, // No value, that's only used for volmeters.
-    error,
-  };
 
   self->jscb.NonBlockingCall(sd, call_jscb);
 }
@@ -696,6 +721,7 @@ void ObsInterface::connect_signal_handlers(obs_output_t *output) {
   signal_handler_connect(sh, "stop", output_signal_handler,  stop_ctx);
   signal_handler_connect(sh, "activate", output_signal_handler, activate_ctx);
   signal_handler_connect(sh, "deactivate", output_signal_handler, deactivate_ctx);
+  signal_handler_connect(sh, "converted", output_signal_handler, converted_ctx);
 }
 
 void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
@@ -706,6 +732,7 @@ void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
   signal_handler_disconnect(sh, "stop", output_signal_handler,  stop_ctx);
   signal_handler_disconnect(sh, "activate", output_signal_handler, activate_ctx);
   signal_handler_disconnect(sh, "deactivate", output_signal_handler, deactivate_ctx);
+  signal_handler_disconnect(sh, "converted", output_signal_handler, converted_ctx);
 }
 
 bool draw_source_outline(obs_scene_t *scene, obs_sceneitem_t *item, void *p) {
@@ -1107,6 +1134,7 @@ ObsInterface::ObsInterface(
   stop_ctx = new SignalContext{ this, "stop" };
   activate_ctx = new SignalContext{this, "activate"};
   deactivate_ctx = new SignalContext{this, "deactivate"};
+  converted_ctx = new SignalContext{this, "converted"};
 
   // Create the resources we rely on.
   create_scene();
@@ -1228,6 +1256,7 @@ ObsInterface::~ObsInterface() {
   delete stop_ctx;
   delete activate_ctx;
   delete deactivate_ctx;
+  delete converted_ctx;
 
   // finally, shut down OBS
   blog(LOG_DEBUG, "Now shutting down OBS");
@@ -1248,6 +1277,16 @@ void ObsInterface::setBuffering(bool value) {
   }
 
   buffering = value;
+  create_output();
+}
+
+void ObsInterface::setFragmentation(bool value) {
+  if (obs_output_active(output)) {
+    blog(LOG_ERROR, "Cannot change fragmentation state while output is active");
+    throw new std::runtime_error("Cannot change fragmentation state while output is active");
+  }
+
+  fragmented = value;
   create_output();
 }
 

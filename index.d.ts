@@ -171,6 +171,7 @@ interface Noobs {
 
   // Recording functions.
   SetBuffering(buffering: boolean): void; // In buffering mode, the recording is stored in memory and can be converted to a file later.
+  SetFragmentation(fragmented: boolean): void; // Use fragmented MP4.
   StartBuffer(): void;
   StartRecording(offset: number): void;
   StopRecording(): void;

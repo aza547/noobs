@@ -116,6 +116,8 @@ The pre-built OBS libraries are included in `bin/native/linux/`.
 ```bash
 npm version patch # version bump
 npm pack          # build tgz locally
+
+npm login
 npm publish       # publish to npm
 ```
 
