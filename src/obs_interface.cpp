@@ -658,7 +658,7 @@ void ObsInterface::disconnect_signal_handlers(obs_output_t *output) {
   signal_handler_disconnect(sh, "stop", output_signal_handler,  stop_ctx);
   signal_handler_disconnect(sh, "activate", output_signal_handler, activate_ctx);
   signal_handler_disconnect(sh, "deactivate", output_signal_handler, deactivate_ctx);
-  signal_handler_disconnect(sh, "converted ", output_signal_handler, converted_ctx);
+  signal_handler_disconnect(sh, "converted", output_signal_handler, converted_ctx);
 }
 
 bool draw_source_outline(obs_scene_t *scene, obs_sceneitem_t *item, void *p) {
