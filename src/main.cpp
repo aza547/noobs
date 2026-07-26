@@ -691,6 +691,12 @@ Napi::Value ObsGetDrawSourceOutlineEnabled(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ObsGetSourceAudioTracks(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsGetSourceAudioTracks called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   bool valid = info.Length() == 1 && info[0].IsString();
 
   if (!valid) {
@@ -704,6 +710,12 @@ Napi::Value ObsGetSourceAudioTracks(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ObsSetSourceAudioTracks(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsSetSourceAudioTracks called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+  
   bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
 
   if (!valid) {
