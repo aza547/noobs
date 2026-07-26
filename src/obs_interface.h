@@ -68,7 +68,7 @@ class ObsInterface {
     void setAudioSuppression(bool enabled); // Enable audio suppression.
     void setForceMono(bool enabled); // Enable force mono audio.
     uint32_t getSourceAudioTracks(std::string name); // Get the audio tracks for a source.
-    void setSourceAudioTracks(std::string name, uint32_t mixers); // Set the audio tracks for a source.
+    void setSourceAudioTracks(std::string name, uint32_t tracks); // Set the audio tracks for a source.
 
     void addSourceToScene(std::string name); // Add source to scene.
     void removeSourceFromScene(std::string name); // Remove source from scene.

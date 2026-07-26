@@ -200,7 +200,7 @@ interface Noobs {
   SetAudioSuppression(enabled: boolean): void; // Enable or disable audio suppression (noise gate).
   SetForceMono(enabled: boolean): void; // Enable or disable the force mono audio setting.
   GetSourceAudioTracks(name: string): number; // Get the audio tracks for a source.
-  SetSourceAudioTracks(name: string, mixers: number): void; // Set the audio tracks for a source.
+  SetSourceAudioTracks(name: string, tracks: number): void; // Set the audio tracks for a source. Tracks is a bitmask. See test/tracks.js.
 
   // Scene management functions.
   AddSourceToScene(sourceName: string): void;
