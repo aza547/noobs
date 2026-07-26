@@ -25,7 +25,7 @@
   "author": "Warcraft Recorder LTD",
   "license": "LGPL-2.0",
   "devDependencies": {
-    "@types/node": "^24.1.0",
+    "@types/node": "^24.13.3",
     "node-gyp": "^11.2.0",
     "ts-node": "^10.9.2"
   },

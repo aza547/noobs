@@ -357,7 +357,7 @@ Napi::Value ObsCreateSource(const Napi::CallbackInfo& info) {
     Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
-
+  
   bool valid = info.Length() == 2 &&
    info[0].IsString() && // Source name
    info[1].IsString();   // Source type
@@ -690,6 +690,32 @@ Napi::Value ObsGetDrawSourceOutlineEnabled(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), obs->getDrawSourceOutlineEnabled());
 }
 
+Napi::Value ObsGetSourceAudioTracks(const Napi::CallbackInfo& info) {
+  bool valid = info.Length() == 1 && info[0].IsString();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsGetSourceAudioTracks").ThrowAsJavaScriptException();
+    return info.Env().Undefined();  
+  }
+
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  uint32_t tracks = obs->getSourceAudioTracks(name);
+  return Napi::Number::New(info.Env(), tracks);
+}
+
+Napi::Value ObsSetSourceAudioTracks(const Napi::CallbackInfo& info) {
+  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetSourceAudioTracks").ThrowAsJavaScriptException();
+    return info.Env().Undefined();  
+  }
+  
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  uint32_t tracks = info[1].As<Napi::Number>().Uint32Value();
+  obs->setSourceAudioTracks(name, tracks);
+  return info.Env().Undefined();
+}
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("Init", Napi::Function::New(env, ObsInit));
@@ -717,6 +743,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("SetVolmeterEnabled", Napi::Function::New(env, ObsSetVolmeterEnabled));
   exports.Set("SetAudioSuppression", Napi::Function::New(env, ObsSetAudioSuppression));
   exports.Set("SetForceMono", Napi::Function::New(env, ObsSetForceMono));
+  exports.Set("GetSourceAudioTracks", Napi::Function::New(env, ObsGetSourceAudioTracks));
+  exports.Set("SetSourceAudioTracks", Napi::Function::New(env, ObsSetSourceAudioTracks));
 
   exports.Set("AddSourceToScene", Napi::Function::New(env, ObsAddSourceToScene));
   exports.Set("RemoveSourceFromScene", Napi::Function::New(env, ObsRemoveSourceFromScene));

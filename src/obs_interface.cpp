@@ -335,35 +335,43 @@ void ObsInterface::create_video_encoders() {
 }
 
 void ObsInterface::create_audio_encoders() {
-  blog(LOG_INFO, "Create audio encoder");
+  blog(LOG_INFO, "Create audio encoders");
 
-  if (audio_encoder) {
-    blog(LOG_DEBUG, "Releasing audio encoder");
-    obs_encoder_release(audio_encoder);
-    audio_encoder = nullptr;
+  for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+    blog(LOG_INFO, "Release audio encoder: %d", i);
+
+    if (audio_encoders[i]) {
+        blog(LOG_DEBUG, "Releasing audio encoder");
+        obs_encoder_release(audio_encoders[i]);
+        audio_encoders[i] = nullptr;
+    }
   }
 
-  audio_encoder = obs_audio_encoder_create(
-    "ffmpeg_aac", 
-    "aac_file",
-    NULL, 
-    0, 
-    NULL
-  );
+  for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+    blog(LOG_INFO, "Create audio encoder: %d", i);
+    std::string name = "noobs_aac_encoder_" + std::to_string(i);
+    
+    audio_encoders[i] = obs_audio_encoder_create(
+      "ffmpeg_aac", 
+      name.c_str(),
+      NULL, 
+      i, 
+      NULL
+    );
 
-  if (!audio_encoder) {
-    blog(LOG_ERROR, "Failed to create audio encoder!");
-    throw std::runtime_error("Failed to create audio encoder!");
+    if (!audio_encoders[i]) {
+      blog(LOG_ERROR, "Failed to create audio encoder!");
+      throw std::runtime_error("Failed to create audio encoder!");
+    }
+
+    obs_data_t *aenc_settings = obs_data_create();
+    obs_data_set_int(aenc_settings, "bitrate", 128);
+    obs_encoder_update(audio_encoders[i], aenc_settings);
+    obs_data_release(aenc_settings);
+
+    obs_output_set_audio_encoder(output, audio_encoders[i], i);
+    obs_encoder_set_audio(audio_encoders[i], obs_get_audio());
   }
-
-  blog(LOG_INFO, "Set audio encoder settings");
-  obs_data_t *aenc_settings = obs_data_create();
-  obs_data_set_int(aenc_settings, "bitrate", 128);
-  obs_encoder_update(audio_encoder, aenc_settings);
-  obs_data_release(aenc_settings);
-
-  obs_output_set_audio_encoder(output, audio_encoder, 0);
-  obs_encoder_set_audio(audio_encoder, obs_get_audio());
 }
 
 void ObsInterface::create_scene() {
@@ -1493,4 +1501,58 @@ void ObsInterface::zeroVolmeter(std::string name) {
   blog(LOG_INFO, "Zeroing volmeter for %s", name.c_str());
   SignalData* sd = new SignalData{ "volmeter", name.c_str(), 0, 0 };
   jscb.NonBlockingCall(sd, call_jscb);
+}
+
+uint32_t ObsInterface::getSourceAudioTracks(std::string name)
+{
+  blog(LOG_INFO, "Getting source %s audio tracks", name.c_str());
+
+  auto it = sources.find(name);
+
+  if (it == sources.end()) {
+    blog(LOG_WARNING, "Source %s not found when getting tracks", name.c_str());
+    return 0;
+  }
+
+  obs_source_t* source = it->second;
+  const char* type = obs_source_get_id(source);
+  
+  bool audio = 
+    strcmp(type, AUDIO_OUTPUT) == 0 ||
+    strcmp(type, AUDIO_INPUT) == 0  ||
+    strcmp(type, AUDIO_PROCESS) == 0;
+
+  if (!audio) {
+    blog(LOG_WARNING, "Source %s is not an audio source", name.c_str());
+    return 0;
+  }
+
+  return obs_source_get_audio_mixers(it->second);
+}
+
+void ObsInterface::setSourceAudioTracks(std::string name, uint32_t tracks)
+{
+  blog(LOG_INFO, "Setting source %s audio tracks to %u", name.c_str(), tracks);
+
+  auto it = sources.find(name);
+
+  if (it == sources.end()) {
+    blog(LOG_WARNING, "Source %s not found when setting tracks", name.c_str());
+    return;
+  }
+
+  obs_source_t* source = it->second;
+  const char* type = obs_source_get_id(source);
+  
+  bool audio = 
+    strcmp(type, AUDIO_OUTPUT) == 0 || 
+    strcmp(type, AUDIO_INPUT) == 0  || 
+    strcmp(type, AUDIO_PROCESS) == 0;
+
+  if (!audio) {
+    blog(LOG_WARNING, "Source %s is not an audio source", name.c_str());
+    return;
+  }
+
+  obs_source_set_audio_mixers(it->second, tracks);
 }
