@@ -349,7 +349,7 @@ void ObsInterface::create_audio_encoders() {
 
   for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
     blog(LOG_INFO, "Create audio encoder: %d", i);
-    std::string name = "noobs_aac_encoder_" + std::to_string(i);
+    std::string name = "Track " + std::to_string(i + 1);
     
     audio_encoders[i] = obs_audio_encoder_create(
       "ffmpeg_aac", 
