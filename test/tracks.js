@@ -14,6 +14,7 @@ async function test() {
   console.log('Recording path:', recordingPath);
 
   noobs.Init(distPath, logPath, cb);
+  noobs.SetBuffering(true);
   noobs.SetRecordingCfg(recordingPath, 'mp4');
 
   console.log('Creating source...');
@@ -65,6 +66,9 @@ async function test() {
     console.error('Error3: Audio tracks not set correctly!');
     return;
   }
+  
+  console.log('Sleep 2s...');
+  noobs.StartBuffer();
 
   console.log('Start recording');
   noobs.StartRecording(0);
