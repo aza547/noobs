@@ -22,7 +22,8 @@ async function test() {
   console.log('Log path:', logPath);
   console.log('Recording path:', recordingPath);
 
-  noobs.Init(distPath, logPath, recordingPath, cb);
+  noobs.Init(distPath, logPath, cb);
+  noobs.SetRecordingCfg(recordingPath, 'mp4');
 
   console.log('Creating source...');
 // [INFO] 	- wasapi_input_capture
