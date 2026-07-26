@@ -66,10 +66,30 @@ async function test() {
     return;
   }
 
+  console.log('Start recording');
+  noobs.StartRecording(0);
+  console.log('Sleep 2s...');
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  // Change mid recording
+  console.log('Change tracks while recording...');
+  noobs.SetSourceAudioTracks('Test Speaker', track6);
+  const after6 = noobs.GetSourceAudioTracks('Test Speaker');
+  console.log('Speaker audio tracks after setting track 6:', after6);
+
+  if (after6 !== track6) {
+    console.error('Error4: Audio tracks not set correctly!');
+    return;
+  }
+
+  console.log('Sleep 2s...');
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  console.log('Stop recording');
+  noobs.StopRecording();
+
   noobs.Shutdown();
   console.log('Test Done');
 }
 
 console.log('Starting test...');
 test();
-console.log('Test now running async');
