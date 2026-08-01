@@ -411,6 +411,12 @@ Napi::Value ObsGetSourceSettings(const Napi::CallbackInfo& info) {
   std::string name = info[0].As<Napi::String>().Utf8Value();
 
   obs_data_t* settings = obs->getSourceSettings(name);
+
+  if (!settings) {
+    Napi::Error::New(info.Env(), "Failed to get settings for source: " + name).ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   Napi::Object result = data_to_napi(info.Env(), settings);
   obs_data_release(settings);
 
