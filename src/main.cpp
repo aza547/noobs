@@ -1,6 +1,8 @@
 #include <napi.h>
 #include <windows.h>
 #include <obs.h>
+#include <exception>
+#include <memory>
 #include "obs_interface.h"
 #include "utils.h"
 
@@ -20,6 +22,11 @@ Napi::Value ObsInit(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
   }
 
+  if (obs) {
+    Napi::Error::New(info.Env(), "Obs is already initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   std::string distPath = info[0].As<Napi::String>().Utf8Value();
   std::string logPath = info[1].As<Napi::String>().Utf8Value();
   Napi::Function fn = info[2].As<Napi::Function>();
@@ -27,7 +34,19 @@ Napi::Value ObsInit(const Napi::CallbackInfo& info) {
   Napi::ThreadSafeFunction jscb =
     Napi::ThreadSafeFunction::New(info.Env(), fn, "JavaScript callback", 0, 1);
 
-  obs = new ObsInterface(distPath, logPath, jscb);
+  std::unique_ptr<ObsInterface> candidate;
+
+  try {
+    candidate = std::make_unique<ObsInterface>(distPath, logPath, jscb);
+  } catch (const std::exception& error) {
+    Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  } catch (...) {
+    Napi::Error::New(info.Env(), "Unknown error while initializing OBS").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  obs = candidate.release();
   return info.Env().Undefined();
 }
 

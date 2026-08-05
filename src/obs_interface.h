@@ -106,6 +106,7 @@ class ObsInterface {
     
     obs_display_t *display = nullptr;
     HWND preview_hwnd = nullptr; // window handle for scene preview
+    std::string log_path;
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";
@@ -114,20 +115,22 @@ class ObsInterface {
     bool buffering = false; // Whether we are buffering the recording in memory.
     bool fragmented = false; // Use fragmented MP4.
     bool drawSourceOutline = false; // Draw red outline around source
+    bool obs_started = false; // Whether this instance owns a successful obs_startup call.
     void init_obs(const std::string& distPath);
+    void cleanup() noexcept;
     int reset_video(int fps, int width, int height);
     bool reset_audio();
     void load_module(const char* module, const char* data, bool allowFail); // Load a module, data is optional.
     void connect_signal_handlers(obs_output_t *output);
     void disconnect_signal_handlers(obs_output_t *output);
 
-    SignalContext* starting_ctx;
-    SignalContext* start_ctx;
-    SignalContext* stopping_ctx;
-    SignalContext* stop_ctx;
-    SignalContext* activate_ctx;
-    SignalContext* deactivate_ctx;
-    SignalContext* converted_ctx;
+    SignalContext* starting_ctx = nullptr;
+    SignalContext* start_ctx = nullptr;
+    SignalContext* stopping_ctx = nullptr;
+    SignalContext* stop_ctx = nullptr;
+    SignalContext* activate_ctx = nullptr;
+    SignalContext* deactivate_ctx = nullptr;
+    SignalContext* converted_ctx = nullptr;
     static void output_signal_handler(void *data, calldata_t *cd);
 
     void list_encoders(obs_encoder_type type = OBS_ENCODER_VIDEO);

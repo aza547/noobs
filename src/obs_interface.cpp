@@ -168,6 +168,8 @@ void ObsInterface::init_obs(const std::string& distPath) {
     throw std::runtime_error("OBS startup failed");
   }
 
+  obs_started = true;
+
   if (!obs_initialized()) {
     blog(LOG_ERROR, "OBS not initialized!");
     throw std::runtime_error("OBS initialization failed");
@@ -966,35 +968,61 @@ ObsInterface::ObsInterface(
   const std::string& distPath, 
   const std::string& logPath, 
   Napi::ThreadSafeFunction cb
-) {
+) : log_path(logPath), jscb(cb) {
   // Setup logs first so we have logs for the initialization.
-  base_set_log_handler(log_handler, (void*)logPath.c_str());
+  base_set_log_handler(log_handler, (void*)log_path.c_str());
   blog(LOG_DEBUG, "Creating ObsInterface");
 
-  // Initialize OBS and load required modules.
-  init_obs(distPath);
+  try {
+    // Initialize OBS and load required modules.
+    init_obs(distPath);
 
-  // Setup callback function.
-  jscb = cb;
+    // Contexts for signal callbacks.
+    starting_ctx = new SignalContext{ this, "starting" };
+    start_ctx = new SignalContext{ this, "start" };
+    stopping_ctx = new SignalContext{ this, "stopping" };
+    stop_ctx = new SignalContext{ this, "stop" };
+    activate_ctx = new SignalContext{this, "activate"};
+    deactivate_ctx = new SignalContext{this, "deactivate"};
+    converted_ctx = new SignalContext{this, "converted"};
 
-  // Contexts for signal callbacks.
-  starting_ctx = new SignalContext{ this, "starting" };
-  start_ctx = new SignalContext{ this, "start" };
-  stopping_ctx = new SignalContext{ this, "stopping" };
-  stop_ctx = new SignalContext{ this, "stop" };
-  activate_ctx = new SignalContext{this, "activate"};
-  deactivate_ctx = new SignalContext{this, "deactivate"};
-  converted_ctx = new SignalContext{this, "converted"};
-
-  // Create the resources we rely on.
-  create_scene();
-  create_output();
-  create_video_encoders();
-  create_audio_encoders();
+    // Create the resources we rely on.
+    create_scene();
+    create_output();
+    create_video_encoders();
+    create_audio_encoders();
+  } catch (...) {
+    cleanup();
+    throw;
+  }
 }
 
 ObsInterface::~ObsInterface() {
+  cleanup();
+}
+
+void ObsInterface::cleanup() noexcept {
   blog(LOG_DEBUG, "Shutting down");
+
+  if (display) {
+    obs_display_remove_draw_callback(display, draw_callback, this);
+    obs_display_destroy(display);
+    display = nullptr;
+  }
+
+  if (preview_hwnd) {
+    DestroyWindow(preview_hwnd);
+    preview_hwnd = nullptr;
+  }
+
+  if (output) {
+    if (obs_output_active(output)) {
+      blog(LOG_DEBUG, "Force stopping output");
+      obs_output_force_stop(output);
+    }
+
+    disconnect_signal_handlers(output);
+  }
 
   for (auto& kv : volmeters) {
     obs_volmeter_t* volmeter = kv.second;
@@ -1002,25 +1030,17 @@ ObsInterface::~ObsInterface() {
     obs_volmeter_detach_source(volmeter);
     obs_volmeter_destroy(volmeter);
     blog(LOG_INFO, "Volmeter deleted for source: %s", kv.first.c_str());
-    volmeters.erase(kv.first);
   }
+  volmeters.clear();
 
   for (auto& kv : volmeter_cb_ctx) {
     SignalContext* ctx = kv.second;
     delete ctx;
-    volmeter_cb_ctx.erase(kv.first);
   }
-
-  delete starting_ctx;
-  delete start_ctx;
-  delete stopping_ctx;
-  delete stop_ctx;
-  delete activate_ctx;
-  delete deactivate_ctx;
-  delete converted_ctx;
+  volmeter_cb_ctx.clear();
 
   for (auto& kv : sources) {
-    std::string name = kv.first;
+    const std::string& name = kv.first;
     obs_source_t* source = kv.second;
 
     auto filter_it = filters.find(name);
@@ -1029,42 +1049,73 @@ ObsInterface::~ObsInterface() {
       obs_source_t* filter = filter_it->second;
       obs_source_filter_remove(source, filter);
       obs_source_release(filter);
-      filters.erase(name);
+      filters.erase(filter_it);
       blog(LOG_INFO, "Filter removed for source: %s on shutdown", name.c_str());
     }
 
     blog(LOG_DEBUG, "Releasing source: %s", name.c_str());
     obs_source_release(source);
-    sources.erase(name);
   }
+  sources.clear();
+  sizes.clear();
+
+  for (auto& kv : filters) {
+    obs_source_release(kv.second);
+  }
+  filters.clear();
 
   if (scene) {
     blog(LOG_DEBUG, "Releasing scene");
+    obs_set_output_source(0, nullptr);
     obs_scene_release(scene);
+    scene = nullptr;
   }
 
   if (output) {
-    if (obs_output_active(output)) {
-      blog(LOG_DEBUG, "Force stopping output");
-      obs_output_force_stop(output);
-    }
-      
     blog(LOG_DEBUG, "Releasing output");
     obs_output_release(output);
+    output = nullptr;
   }
 
-  // if (video_encoder) {
-  //   blog(LOG_DEBUG, "Releasing video encoder");
-  //   obs_encoder_release(video_encoder);
-  // }
+  if (video_encoder) {
+    blog(LOG_DEBUG, "Releasing video encoder");
+    obs_encoder_release(video_encoder);
+    video_encoder = nullptr;
+  }
 
-  // if (audio_encoder) {
-  //   blog(LOG_DEBUG, "Releasing audio encoder");
-  //   obs_encoder_release(audio_encoder);
-  // }
+  for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+    if (audio_encoders[i]) {
+      blog(LOG_DEBUG, "Releasing audio encoder: %d", i);
+      obs_encoder_release(audio_encoders[i]);
+      audio_encoders[i] = nullptr;
+    }
+  }
 
-  blog(LOG_DEBUG, "Now shutting down OBS");
-  obs_shutdown();
+  if (video_encoder_settings) {
+    obs_data_release(video_encoder_settings);
+    video_encoder_settings = nullptr;
+  }
+
+  delete starting_ctx;
+  starting_ctx = nullptr;
+  delete start_ctx;
+  start_ctx = nullptr;
+  delete stopping_ctx;
+  stopping_ctx = nullptr;
+  delete stop_ctx;
+  stop_ctx = nullptr;
+  delete activate_ctx;
+  activate_ctx = nullptr;
+  delete deactivate_ctx;
+  deactivate_ctx = nullptr;
+  delete converted_ctx;
+  converted_ctx = nullptr;
+
+  if (obs_started) {
+    blog(LOG_DEBUG, "Now shutting down OBS");
+    obs_shutdown();
+    obs_started = false;
+  }
 
   if (jscb) {
     blog(LOG_DEBUG, "Releasing JavaScript callback");

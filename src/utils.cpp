@@ -418,10 +418,17 @@ void register_preview_window_class() {
 	klass.lpszClassName = TEXT("PreviewWindowClass");
 	klass.hIconSm = NULL;
 
-	if (RegisterClassEx(&klass) == NULL) {
-		blog(LOG_ERROR, "Failed to register window class");
-    throw new std::runtime_error("Failed to register window class");
-	}
+  if (RegisterClassEx(&klass) == NULL) {
+    DWORD error = GetLastError();
+
+    if (error != ERROR_CLASS_ALREADY_EXISTS) {
+      blog(LOG_ERROR, "Failed to register window class. Error: %lu", error);
+      throw std::runtime_error("Failed to register window class");
+    }
+
+    blog(LOG_DEBUG, "Preview window class is already registered");
+    return;
+  }
 
   blog(LOG_INFO, "Registered preview window class");
 }
