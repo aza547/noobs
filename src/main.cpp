@@ -700,6 +700,12 @@ Napi::Value ObsSetSourcePos(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ObsSetDrawSourceOutline(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsSetDrawSourceOutline called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   bool valid =  info.Length() == 1 && info[0].IsBoolean();
     if (!valid) {
     Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetDrawSourceOutline").ThrowAsJavaScriptException();
@@ -712,6 +718,12 @@ Napi::Value ObsSetDrawSourceOutline(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ObsGetDrawSourceOutlineEnabled(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsGetDrawSourceOutlineEnabled called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   return Napi::Boolean::New(info.Env(), obs->getDrawSourceOutlineEnabled());
 }
 

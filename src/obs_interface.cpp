@@ -491,13 +491,18 @@ std::string ObsInterface::createSource(std::string name, std::string type) {
 void ObsInterface::deleteSource(std::string name) {
   blog(LOG_INFO, "Delete source: %s", name.c_str());
 
+  auto ctx_it = volmeter_cb_ctx.find(name);
+  SignalContext* ctx = ctx_it != volmeter_cb_ctx.end() ? ctx_it->second : nullptr;
+
   // First release a volmeter if there is one present.
   // Only audio sources have volmeters ofcourse.
   auto vol_it = volmeters.find(name);
   
   if (vol_it != volmeters.end()) {
     obs_volmeter_t* volmeter = vol_it->second;
-    obs_volmeter_remove_callback(volmeter, volmeter_callback, this);
+    if (ctx) {
+      obs_volmeter_remove_callback(volmeter, volmeter_callback, ctx);
+    }
     obs_volmeter_detach_source(volmeter);
     obs_volmeter_destroy(volmeter);
     blog(LOG_INFO, "Volmeter deleted for source: %s", name.c_str());
@@ -505,10 +510,7 @@ void ObsInterface::deleteSource(std::string name) {
   }
 
   // Now deal with the callback context.
-  auto ctx_it = volmeter_cb_ctx.find(name);
-
   if (ctx_it != volmeter_cb_ctx.end()) {
-    SignalContext* ctx = ctx_it->second;
     delete ctx;
     volmeter_cb_ctx.erase(ctx_it);
   }
@@ -1026,7 +1028,12 @@ void ObsInterface::cleanup() noexcept {
 
   for (auto& kv : volmeters) {
     obs_volmeter_t* volmeter = kv.second;
-    obs_volmeter_remove_callback(volmeter, volmeter_callback, this);
+    auto ctx_it = volmeter_cb_ctx.find(kv.first);
+
+    if (ctx_it != volmeter_cb_ctx.end()) {
+      obs_volmeter_remove_callback(volmeter, volmeter_callback, ctx_it->second);
+    }
+
     obs_volmeter_detach_source(volmeter);
     obs_volmeter_destroy(volmeter);
     blog(LOG_INFO, "Volmeter deleted for source: %s", kv.first.c_str());
