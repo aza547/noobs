@@ -136,11 +136,12 @@ export type ObsProperty =
   | ObsGenericProperty;
 
 export type Signal = {
-  type: string; // Either "output" or "volmeter" or "source".
+  type: string; // Either "output" or "volmeter", "source", "converted".
   id: string; // Signal identifier, e.g. "stop"
   code: number; // 0 for success, other values for errors
   value?: number; // Currently only used for volmeters.
-  path?: string; // Set on the "converted" output signal for the on-disk recording file.
+  error?: string; // Error message, if any.
+  path?: string; // Converted signal specifies the path.
 };
 
 export type SceneItemPosition = {
@@ -198,6 +199,8 @@ interface Noobs {
   SetVolmeterEnabled(enabled: boolean): void; // Enable or disable the volume meter.
   SetAudioSuppression(enabled: boolean): void; // Enable or disable audio suppression (noise gate).
   SetForceMono(enabled: boolean): void; // Enable or disable the force mono audio setting.
+  GetSourceAudioTracks(name: string): number; // Get the audio tracks for a source.
+  SetSourceAudioTracks(name: string, tracks: number): void; // Set the audio tracks for a source. Tracks is a bitmask. See test/tracks.js.
 
   // Scene management functions.
   AddSourceToScene(sourceName: string): void;
