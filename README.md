@@ -109,7 +109,7 @@ npm install       # install deps
 npm run build     # compile it
 ```
 
-The pre-built OBS libraries are included in `bin/native/linux/`.
+The pre-built OBS libraries are included in `bin/native/linux/`. If you rebuild those, run `./scripts/isolate_sonames.py` after so they don't clash with the system's.
 
 ### Publishing
 
