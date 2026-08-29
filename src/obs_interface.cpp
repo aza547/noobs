@@ -546,7 +546,7 @@ obs_data_t* ObsInterface::getSourceSettings(std::string name) {
 
   if (it == sources.end()) {
     blog(LOG_WARNING, "Source %s not found when getting settings", name.c_str());
-    throw std::runtime_error("Source not found!");
+    return nullptr;
   }
 
   obs_source_t* source = it->second;
@@ -554,7 +554,7 @@ obs_data_t* ObsInterface::getSourceSettings(std::string name) {
   
   if (!settings) {
     blog(LOG_ERROR, "Failed to get settings for source: %s", name.c_str());
-    throw std::runtime_error("Failed to get source settings!");
+    return nullptr;
   }
 
   return settings;
