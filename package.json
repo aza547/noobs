@@ -1,6 +1,6 @@
 {
   "name": "noobs",
-  "version": "0.0.204",
+  "version": "0.0.205",
   "description": "A native Node.js addon with libobs bindings for Warcraft Recorder.",
   "main": "index.js",
   "types": "index.d.ts",
