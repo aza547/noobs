@@ -36,7 +36,7 @@ async function test() {
 
   noobs.Init(distPath, logPath, cb);
   noobs.SetBuffering(true);
-  noobs.SetRecordingCfg(recordingPath, 0);
+  noobs.SetRecordingCfg(recordingPath, 'mp4');
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   console.log('Creating source...');
