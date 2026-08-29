@@ -8,3 +8,4 @@ src/.cache
 src/compile_commands.json
 bin/win32-x64-116
 win-capture/
+.npmrc
