@@ -1,6 +1,8 @@
 #include <napi.h>
 #include <windows.h>
 #include <obs.h>
+#include <exception>
+#include <memory>
 #include "obs_interface.h"
 #include "utils.h"
 
@@ -20,6 +22,11 @@ Napi::Value ObsInit(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
   }
 
+  if (obs) {
+    Napi::Error::New(info.Env(), "Obs is already initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   std::string distPath = info[0].As<Napi::String>().Utf8Value();
   std::string logPath = info[1].As<Napi::String>().Utf8Value();
   Napi::Function fn = info[2].As<Napi::Function>();
@@ -27,7 +34,19 @@ Napi::Value ObsInit(const Napi::CallbackInfo& info) {
   Napi::ThreadSafeFunction jscb =
     Napi::ThreadSafeFunction::New(info.Env(), fn, "JavaScript callback", 0, 1);
 
-  obs = new ObsInterface(distPath, logPath, jscb);
+  std::unique_ptr<ObsInterface> candidate;
+
+  try {
+    candidate = std::make_unique<ObsInterface>(distPath, logPath, jscb);
+  } catch (const std::exception& error) {
+    Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  } catch (...) {
+    Napi::Error::New(info.Env(), "Unknown error while initializing OBS").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  obs = candidate.release();
   return info.Env().Undefined();
 }
 
@@ -681,6 +700,12 @@ Napi::Value ObsSetSourcePos(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ObsSetDrawSourceOutline(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsSetDrawSourceOutline called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   bool valid =  info.Length() == 1 && info[0].IsBoolean();
     if (!valid) {
     Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetDrawSourceOutline").ThrowAsJavaScriptException();
@@ -693,6 +718,12 @@ Napi::Value ObsSetDrawSourceOutline(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value ObsGetDrawSourceOutlineEnabled(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsGetDrawSourceOutlineEnabled called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
   return Napi::Boolean::New(info.Env(), obs->getDrawSourceOutlineEnabled());
 }
 
