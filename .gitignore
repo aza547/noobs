@@ -10,3 +10,4 @@ bin/win32-x64-116
 bin/linux-x64-*
 win-capture/
 .clangd
+.npmrc
