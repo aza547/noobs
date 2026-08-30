@@ -1,10 +1,24 @@
 #include <napi.h>
 #include <windows.h>
 #include <obs.h>
+#include <exception>
 #include "obs_interface.h"
 #include "utils.h"
 
 ObsInterface* obs = nullptr;
+
+template <Napi::Value (*Callback)(const Napi::CallbackInfo&)>
+Napi::Value CatchNativeExceptions(const Napi::CallbackInfo& info) {
+  try {
+    return Callback(info);
+  } catch (const std::exception& error) {
+    Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+  } catch (...) {
+    Napi::Error::New(info.Env(), "Unknown native error").ThrowAsJavaScriptException();
+  }
+
+  return info.Env().Undefined();
+}
 
 extern "C" __declspec(dllexport) DWORD NvOptimusEnablement = 1;
 extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
@@ -736,47 +750,47 @@ Napi::Value ObsSetSourceAudioTracks(const Napi::CallbackInfo& info) {
 }
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-  exports.Set("Init", Napi::Function::New(env, ObsInit));
-  exports.Set("Shutdown", Napi::Function::New(env, ObsShutdown));
-  exports.Set("SetRecordingCfg", Napi::Function::New(env, ObsSetRecordingCfg));
-  exports.Set("ResetVideoContext", Napi::Function::New(env, ObsResetVideoContext));
-  exports.Set("ListVideoEncoders", Napi::Function::New(env, ObsListVideoEncoders));
-  exports.Set("SetVideoEncoder", Napi::Function::New(env, ObsSetVideoEncoder));
+  exports.Set("Init", Napi::Function::New(env, CatchNativeExceptions<ObsInit>));
+  exports.Set("Shutdown", Napi::Function::New(env, CatchNativeExceptions<ObsShutdown>));
+  exports.Set("SetRecordingCfg", Napi::Function::New(env, CatchNativeExceptions<ObsSetRecordingCfg>));
+  exports.Set("ResetVideoContext", Napi::Function::New(env, CatchNativeExceptions<ObsResetVideoContext>));
+  exports.Set("ListVideoEncoders", Napi::Function::New(env, CatchNativeExceptions<ObsListVideoEncoders>));
+  exports.Set("SetVideoEncoder", Napi::Function::New(env, CatchNativeExceptions<ObsSetVideoEncoder>));
 
-  exports.Set("SetBuffering", Napi::Function::New(env, ObsSetBuffering));
-  exports.Set("SetFragmentation", Napi::Function::New(env, ObsSetFragmentation));
-  exports.Set("StartBuffer", Napi::Function::New(env, ObsStartBuffer));
-  exports.Set("StartRecording", Napi::Function::New(env, ObsStartRecording));
-  exports.Set("StopRecording", Napi::Function::New(env, ObsStopRecording));
-  exports.Set("ForceStopRecording", Napi::Function::New(env, ObsForceStopRecording));
-  exports.Set("GetLastRecording", Napi::Function::New(env, ObsGetLastRecording));
+  exports.Set("SetBuffering", Napi::Function::New(env, CatchNativeExceptions<ObsSetBuffering>));
+  exports.Set("SetFragmentation", Napi::Function::New(env, CatchNativeExceptions<ObsSetFragmentation>));
+  exports.Set("StartBuffer", Napi::Function::New(env, CatchNativeExceptions<ObsStartBuffer>));
+  exports.Set("StartRecording", Napi::Function::New(env, CatchNativeExceptions<ObsStartRecording>));
+  exports.Set("StopRecording", Napi::Function::New(env, CatchNativeExceptions<ObsStopRecording>));
+  exports.Set("ForceStopRecording", Napi::Function::New(env, CatchNativeExceptions<ObsForceStopRecording>));
+  exports.Set("GetLastRecording", Napi::Function::New(env, CatchNativeExceptions<ObsGetLastRecording>));
 
-  exports.Set("CreateSource", Napi::Function::New(env, ObsCreateSource));
-  exports.Set("DeleteSource", Napi::Function::New(env, ObsDeleteSource));
-  exports.Set("GetSourceSettings", Napi::Function::New(env, ObsGetSourceSettings));
-  exports.Set("SetSourceSettings", Napi::Function::New(env, ObsSetSourceSettings));
-  exports.Set("GetSourceProperties", Napi::Function::New(env, ObsGetSourceProperties));
-  exports.Set("SetMuteAudioInputs", Napi::Function::New(env, ObsSetMuteAudioInputs));
-  exports.Set("SetSourceVolume", Napi::Function::New(env, ObsSetSourceVolume));
-  exports.Set("SetVolmeterEnabled", Napi::Function::New(env, ObsSetVolmeterEnabled));
-  exports.Set("SetAudioSuppression", Napi::Function::New(env, ObsSetAudioSuppression));
-  exports.Set("SetForceMono", Napi::Function::New(env, ObsSetForceMono));
-  exports.Set("GetSourceAudioTracks", Napi::Function::New(env, ObsGetSourceAudioTracks));
-  exports.Set("SetSourceAudioTracks", Napi::Function::New(env, ObsSetSourceAudioTracks));
+  exports.Set("CreateSource", Napi::Function::New(env, CatchNativeExceptions<ObsCreateSource>));
+  exports.Set("DeleteSource", Napi::Function::New(env, CatchNativeExceptions<ObsDeleteSource>));
+  exports.Set("GetSourceSettings", Napi::Function::New(env, CatchNativeExceptions<ObsGetSourceSettings>));
+  exports.Set("SetSourceSettings", Napi::Function::New(env, CatchNativeExceptions<ObsSetSourceSettings>));
+  exports.Set("GetSourceProperties", Napi::Function::New(env, CatchNativeExceptions<ObsGetSourceProperties>));
+  exports.Set("SetMuteAudioInputs", Napi::Function::New(env, CatchNativeExceptions<ObsSetMuteAudioInputs>));
+  exports.Set("SetSourceVolume", Napi::Function::New(env, CatchNativeExceptions<ObsSetSourceVolume>));
+  exports.Set("SetVolmeterEnabled", Napi::Function::New(env, CatchNativeExceptions<ObsSetVolmeterEnabled>));
+  exports.Set("SetAudioSuppression", Napi::Function::New(env, CatchNativeExceptions<ObsSetAudioSuppression>));
+  exports.Set("SetForceMono", Napi::Function::New(env, CatchNativeExceptions<ObsSetForceMono>));
+  exports.Set("GetSourceAudioTracks", Napi::Function::New(env, CatchNativeExceptions<ObsGetSourceAudioTracks>));
+  exports.Set("SetSourceAudioTracks", Napi::Function::New(env, CatchNativeExceptions<ObsSetSourceAudioTracks>));
 
-  exports.Set("AddSourceToScene", Napi::Function::New(env, ObsAddSourceToScene));
-  exports.Set("RemoveSourceFromScene", Napi::Function::New(env, ObsRemoveSourceFromScene));
-  exports.Set("GetSourcePos", Napi::Function::New(env, ObsGetSourcePos));
-  exports.Set("SetSourcePos", Napi::Function::New(env, ObsSetSourcePos));
+  exports.Set("AddSourceToScene", Napi::Function::New(env, CatchNativeExceptions<ObsAddSourceToScene>));
+  exports.Set("RemoveSourceFromScene", Napi::Function::New(env, CatchNativeExceptions<ObsRemoveSourceFromScene>));
+  exports.Set("GetSourcePos", Napi::Function::New(env, CatchNativeExceptions<ObsGetSourcePos>));
+  exports.Set("SetSourcePos", Napi::Function::New(env, CatchNativeExceptions<ObsSetSourcePos>));
 
-  exports.Set("InitPreview", Napi::Function::New(env, ObsInitPreview));
-  exports.Set("ConfigurePreview", Napi::Function::New(env, ObsConfigurePreview));
-  exports.Set("ShowPreview", Napi::Function::New(env, ObsShowPreview));
-  exports.Set("HidePreview", Napi::Function::New(env, ObsHidePreview));
-  exports.Set("DisablePreview", Napi::Function::New(env, ObsDisablePreview));
-  exports.Set("GetPreviewInfo", Napi::Function::New(env, ObsGetPreviewInfo));
-  exports.Set("GetDrawSourceOutlineEnabled", Napi::Function::New(env, ObsGetDrawSourceOutlineEnabled));
-  exports.Set("SetDrawSourceOutline", Napi::Function::New(env, ObsSetDrawSourceOutline));
+  exports.Set("InitPreview", Napi::Function::New(env, CatchNativeExceptions<ObsInitPreview>));
+  exports.Set("ConfigurePreview", Napi::Function::New(env, CatchNativeExceptions<ObsConfigurePreview>));
+  exports.Set("ShowPreview", Napi::Function::New(env, CatchNativeExceptions<ObsShowPreview>));
+  exports.Set("HidePreview", Napi::Function::New(env, CatchNativeExceptions<ObsHidePreview>));
+  exports.Set("DisablePreview", Napi::Function::New(env, CatchNativeExceptions<ObsDisablePreview>));
+  exports.Set("GetPreviewInfo", Napi::Function::New(env, CatchNativeExceptions<ObsGetPreviewInfo>));
+  exports.Set("GetDrawSourceOutlineEnabled", Napi::Function::New(env, CatchNativeExceptions<ObsGetDrawSourceOutlineEnabled>));
+  exports.Set("SetDrawSourceOutline", Napi::Function::New(env, CatchNativeExceptions<ObsSetDrawSourceOutline>));
 
   return exports;
 }

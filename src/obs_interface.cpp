@@ -1077,7 +1077,7 @@ ObsInterface::~ObsInterface() {
 void ObsInterface::setBuffering(bool value) {
   if (obs_output_active(output)) {
     blog(LOG_ERROR, "Cannot change buffering state while output is active");
-    throw new std::runtime_error("Cannot change buffering state while output is active");
+    throw std::runtime_error("Cannot change buffering state while output is active");
   }
 
   buffering = value;
@@ -1087,7 +1087,7 @@ void ObsInterface::setBuffering(bool value) {
 void ObsInterface::setFragmentation(bool value) {
   if (obs_output_active(output)) {
     blog(LOG_ERROR, "Cannot change fragmentation state while output is active");
-    throw new std::runtime_error("Cannot change fragmentation state while output is active");
+    throw std::runtime_error("Cannot change fragmentation state while output is active");
   }
 
   fragmented = value;
@@ -1345,7 +1345,7 @@ std::vector<std::string> ObsInterface::listAvailableVideoEncoders()
 void ObsInterface::setVideoEncoder(std::string id, obs_data_t* settings) {
   if (obs_output_active(output)) {
     blog(LOG_WARNING, "Cannot change video encoder while output is active");
-    throw new std::runtime_error("Output is active when trying to change encoder");
+    throw std::runtime_error("Output is active when trying to change encoder");
   }
 
   video_encoder_id = id;

@@ -420,7 +420,7 @@ void register_preview_window_class() {
 
 	if (RegisterClassEx(&klass) == NULL) {
 		blog(LOG_ERROR, "Failed to register window class");
-    throw new std::runtime_error("Failed to register window class");
+    throw std::runtime_error("Failed to register window class");
 	}
 
   blog(LOG_INFO, "Registered preview window class");
