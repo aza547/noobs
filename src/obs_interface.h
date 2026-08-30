@@ -1,15 +1,38 @@
 #pragma once
 
+// vended headers/libraries
 #include <obs.h>
 #include <napi.h>
-#include <windows.h>
-#include <map>
-#include <string>
-#include <optional>
+#include <obs-data.h>
 
+// platform system libs
+#ifdef _WIN32
+  #ifndef NOMINMAX
+    #define NOMINMAX // using std
+  #endif
+  #include <windows.h>
+#elif defined(__linux__)
+  #include <X11/Xlib.h>
+  #include <X11/Xutil.h>
+#endif
+
+// std
+#include <atomic>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <string>
+
+
+#ifdef _WIN32
 #define AUDIO_INPUT "wasapi_input_capture"
 #define AUDIO_OUTPUT "wasapi_output_capture"
 #define AUDIO_PROCESS "wasapi_process_output_capture"
+#elif defined(__linux__)
+#define AUDIO_INPUT "pulse_input_capture"
+#define AUDIO_OUTPUT "pulse_output_capture"
+#define AUDIO_PROCESS "pipewire_audio_application_capture"
+#endif
 
 class ObsInterface;
 
@@ -47,6 +70,10 @@ class ObsInterface {
 
     ~ObsInterface();
 
+    bool is_shutting_down() const noexcept {
+      return shutting_down.load(std::memory_order_relaxed);
+    }
+
     void startBuffering(); // Start buffering to memory.
     void startRecording(int offset); // Convert the active buffered recording to a real one.
     void stopRecording(); // Stop the recording.
@@ -57,7 +84,7 @@ class ObsInterface {
     void setRecordingCfg(const std::string& recordingPath, const std::string& fileExtension); // Set the recording path.
     void setVideoContext(int fps, int width, int height); // Reset video settings.
 
-    std::string createSource(std::string name, std::string type); // Create a new source, returns the name of the source which can vary from the requested.
+    std::string createSource(std::string name, std::string type, obs_data_t* settings); // Create a new source, returns the name of the source which can vary from the requested.
     void deleteSource(std::string name); // Release a source.
     obs_data_t* getSourceSettings(std::string name); // Get the current settings.
     void setSourceSettings(std::string name, obs_data_t* settings); // Set settings.
@@ -72,10 +99,11 @@ class ObsInterface {
 
     void addSourceToScene(std::string name); // Add source to scene.
     void removeSourceFromScene(std::string name); // Remove source from scene.
+    void setSceneItemOrder(std::string name, obs_order_movement movement); // Set the z-order of a scene item.
     void getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop); // Size is returned to allow clients to calculate scale.
     void setSourcePos(std::string name, vec2* pos, vec2* scale, obs_sceneitem_crop* crop); // Size does not get set here because it's set by the source itself.
 
-    void initPreview(HWND parent); // Must call this before showPreview to setup resources.
+    void initPreview(uintptr_t parent_handle); // Must call this before showPreview to setup resources.
     void configurePreview(int x, int y, int width, int height); // Move and resize the preview display.
     void showPreview(); // Show the preview display.
     void hidePreview(); // Hide the preview display, but leave it running.
@@ -99,13 +127,19 @@ class ObsInterface {
     obs_scene_t *scene = nullptr;
 
   private:
+    std::atomic<bool> shutting_down{false};
     obs_output_t *output = nullptr;
 
     obs_encoder_t *video_encoder = nullptr;
     obs_encoder_t* audio_encoders[MAX_AUDIO_MIXES] = { nullptr };
     
     obs_display_t *display = nullptr;
+#ifdef _WIN32
     HWND preview_hwnd = nullptr; // window handle for scene preview
+#elif defined(__linux__)
+    Window preview_window = 0;
+    Display* x11_display = nullptr;
+#endif
     Napi::ThreadSafeFunction jscb; // javascript callback
     std::string recording_path = ""; 
     std::string unbuffered_output_filename = "";

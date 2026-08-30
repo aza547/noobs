@@ -1,8 +1,8 @@
 #pragma once
 
 #define OBS_DATA_PATH "../../data"
-#define OBS_PLUGIN_PATH "../..//obs-plugins/64bit"
-#define OBS_PLUGIN_DESTINATION "obs-plugins/64bit"
+#define OBS_PLUGIN_PATH "../../obs-plugins/win64"
+#define OBS_PLUGIN_DESTINATION "obs-plugins/win64"
 
 /* #undef GIO_FOUND */
 /* #undef PULSEAUDIO_FOUND */

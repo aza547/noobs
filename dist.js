@@ -1,9 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const packageName = 'noobs.node';
 const distRoot = path.resolve(__dirname, 'dist');
 const distBin = path.join(distRoot, 'bin');
+
+// Determine platform-specific binary name
+const platform = os.platform();  // 'win32' or 'linux'
+const arch = os.arch();          // 'x64'
+const binaryName = `noobs-${platform}-${arch}.node`;
 
 // Clean the dist directory if it exists.
 if (fs.existsSync(distRoot)) {
@@ -14,54 +19,90 @@ if (fs.existsSync(distRoot)) {
 fs.mkdirSync(distRoot);
 fs.mkdirSync(distBin);
 
-// Copy the compiled .node file.
-const addonSrc = path.resolve(__dirname, 'build', 'Release', packageName);
-const addonDest = path.join(distRoot, packageName);
+// Copy the compiled .node file with platform-specific name.
+const addonSrc = path.resolve(__dirname, 'build', 'Release', 'noobs.node');
+const addonDest = path.join(distRoot, binaryName);
 fs.copyFileSync(addonSrc, addonDest);
+console.log(`Copied ${addonSrc} -> ${addonDest}`);
 
-// Now copy the .dll files we need.
-const binSrc = path.resolve(__dirname, 'bin', '64bit');
-const binDst = path.resolve(__dirname, 'dist', 'bin');
+// Copy Windows binaries to dist/bin/win64
+const win64BinSrc = path.resolve(__dirname, 'bin', 'native', 'win64');
+const win64BinDst = path.join(distBin, 'win64');
 
-fs.readdirSync(binSrc)
-  .filter((file) => file.endsWith('.dll'))
-  .forEach((file) => {
-    const src = path.join(binSrc, file);
-    const dst = path.join(binDst, file);
-    fs.copyFileSync(src, dst);
+const linuxSafeSymlink = {
+    recursive: true, // entire directory
+    dereference: false,       // don't follow symlinks
+    verbatimSymlinks: true,   // preserve relative symlink targets
+}
+
+if (fs.existsSync(win64BinSrc)) {
+  fs.mkdirSync(win64BinDst);
+
+  // Copy .dll files
+  fs.readdirSync(win64BinSrc)
+    .filter((file) => file.endsWith('.dll'))
+    .forEach((file) => {
+      const src = path.join(win64BinSrc, file);
+      const dst = path.join(win64BinDst, file);
+      fs.copyFileSync(src, dst);
+    });
+
+  // Copy executable files required on Windows
+  const exeFiles = [
+    'obs-ffmpeg-mux.exe', // Required for any sort of recording.
+    'obs-amf-test.exe',   // For getting AMF encoding capabilities.
+    'obs-nvenc-test.exe', // For getting NVENC encoding capabilities.
+    'obs-qsv-test.exe',   // For getting QSV encoding capabilities.
+    'ffmpeg.exe',          // Dynamically linked ffmpeg exe.
+    'ffprobe.exe'          // Dynamically linked ffprobe exe.
+  ];
+
+  exeFiles.forEach((file) => {
+    const srcPath = path.join(win64BinSrc, file);
+    const destPath = path.join(win64BinDst, file);
+    if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+    }
   });
+}
 
-  // Copy executable files required.
-const exeFiles = [
-  'obs-ffmpeg-mux.exe', // Required for any sort of recording.
-  'obs-amf-test.exe',   // For getting AMF encoding capabilities.
-  'obs-nvenc-test.exe', // For getting NVENC encoding capabilities.
-  'obs-qsv-test.exe',    // For getting QSV encoding capabilities.
-  'ffmpeg.exe', // Dynamically linked ffmpeg exe.
-  'ffprobe.exe' // Dynamically linked ffprobe exe.
-];
+// Copy Linux binaries to dist/bin/linux
+const linuxBinSrc = path.resolve(__dirname, 'bin', 'native', 'linux');
+const linuxBinDst = path.join(distBin, 'linux');
 
-exeFiles.forEach((file) => {
-  const srcPath = path.resolve(__dirname, 'bin', '64bit', file);
-  const destPath = path.resolve(__dirname, 'dist', 'bin', file);
-  fs.copyFileSync(srcPath, destPath);
-});
+if (fs.existsSync(linuxBinSrc)) {
+  fs.cpSync(linuxBinSrc, linuxBinDst, linuxSafeSymlink);
+}
 
-// Copy plugins themselves.
-const pluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins');
-const pluginDst = path.resolve(__dirname, 'dist', 'obs-plugins');
+// Copy plugins for both platforms.
+// Windows plugins
+const win64PluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins', 'win64');
+const win64PluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', 'win64');
 
-fs.cpSync(pluginSrc, pluginDst, { 
-  recursive: true ,  
-  filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
-});
+if (fs.existsSync(win64PluginSrc)) {
+  fs.cpSync(win64PluginSrc, win64PluginDst, { 
+    recursive: true,
+    filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
+  });
+}
+
+// Linux plugins
+const linuxPluginSrc = path.resolve(__dirname, 'bin', 'obs-plugins', 'linux');
+const linuxPluginDst = path.resolve(__dirname, 'dist', 'obs-plugins', 'linux');
+
+if (fs.existsSync(linuxPluginSrc)) {
+  fs.cpSync(linuxPluginSrc, linuxPluginDst, { 
+    ...linuxSafeSymlink,
+    filter: (src) => !src.endsWith('.pdb')
+  });
+}
 
 // Copy data, including effects and plugin data.
 const dataSrc = path.resolve(__dirname, 'bin', 'data');
 const dataDst = path.resolve(__dirname, 'dist', 'data');
 
 fs.cpSync(dataSrc, dataDst, { 
-  recursive: true,  
+  ...linuxSafeSymlink,
   filter: (src) => !src.endsWith('.pdb') // Exclude PDB files, they are debug files and they are huge.
 });
 

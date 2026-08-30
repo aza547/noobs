@@ -1,13 +1,22 @@
-#include <napi.h>
-#include <windows.h>
-#include <obs.h>
+// project
 #include "obs_interface.h"
 #include "utils.h"
 
+// vended headers/lib
+#include <napi.h>
+#include <obs.h>
+#include <obs-data.h>
+
+// std
+#include <algorithm>
+#include <cstdint>
+
 ObsInterface* obs = nullptr;
 
-extern "C" __declspec(dllexport) DWORD NvOptimusEnablement = 1;
-extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#ifdef _WIN32
+  extern "C" __declspec(dllexport) DWORD NvOptimusEnablement = 1;
+  extern "C" __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
 
 Napi::Value ObsInit(const Napi::CallbackInfo& info) {
   bool valid = info.Length() == 3 &&
@@ -259,13 +268,24 @@ Napi::Value ObsInitPreview(const Napi::CallbackInfo& info) {
 
   Napi::Buffer<uint8_t> buffer = info[0].As<Napi::Buffer<uint8_t>>();
 
-  if (buffer.Length() < sizeof(HWND)) {
-    Napi::TypeError::New(info.Env(), "Buffer too small for HWND").ThrowAsJavaScriptException();
+  #ifdef _WIN32
+  constexpr size_t minBufferSize = sizeof(HWND);
+  #elif defined(__linux__)
+  // Electron passes a 4 byte integer to maintain 32-bit compat
+  // https://github.com/electron/electron/issues/19068
+  constexpr size_t minBufferSize = sizeof(uint32_t); 
+  #else
+  constexpr size_t minBufferSize = sizeof(void*);
+  #endif
+
+  if (buffer.Length() < minBufferSize) {
+    Napi::TypeError::New(info.Env(), "Buffer too small for HWND/Window").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
 
-  HWND hwnd = *reinterpret_cast<HWND*>(buffer.Data());
-  obs->initPreview(hwnd);
+  uintptr_t parent_handle = 0;
+  std::memcpy(&parent_handle, buffer.Data(), std::min(buffer.Length(), sizeof(parent_handle)));
+  obs->initPreview(parent_handle);
   return info.Env().Undefined();
 }
 
@@ -357,10 +377,13 @@ Napi::Value ObsCreateSource(const Napi::CallbackInfo& info) {
     Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
-  
-  bool valid = info.Length() == 2 &&
-   info[0].IsString() && // Source name
-   info[1].IsString();   // Source type
+
+  bool valid = 
+    (info.Length() == 2 || info.Length() == 3) &&
+    info[0].IsString() && // Source name
+    info[1].IsString() && // Source type
+    // settings are passed on linux for pipewire restore tokens
+    (info.Length() == 2 || info[2].IsObject());
 
   if (!valid) {
     Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsCreateSource").ThrowAsJavaScriptException();
@@ -370,7 +393,17 @@ Napi::Value ObsCreateSource(const Napi::CallbackInfo& info) {
   std::string name = info[0].As<Napi::String>().Utf8Value();
   std::string type = info[1].As<Napi::String>().Utf8Value();
 
-  std::string real_name = obs->createSource(name, type);
+  obs_data_t* settings = nullptr;
+  if (info.Length() == 3) {
+    Napi::Object obj = info[2].As<Napi::Object>();
+    settings = napi_to_data(obj);
+  }
+
+  std::string real_name = obs->createSource(name, type, settings);
+
+  if (settings) {
+    obs_data_release(settings);
+  }
   return Napi::String::New(info.Env(), real_name);
 }
 
@@ -606,6 +639,30 @@ Napi::Value ObsRemoveSourceFromScene(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+Napi::Value ObsSetSceneItemOrder(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsSetSceneItemOrder called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  bool valid = info.Length() == 2 && info[0].IsString() && info[1].IsNumber();
+
+  if (!valid) {
+    Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetSceneItemOrder").ThrowAsJavaScriptException();
+    return info.Env().Undefined();  
+  }
+
+  std::string name = info[0].As<Napi::String>().Utf8Value();
+  int movement_int = info[1].As<Napi::Number>().Int32Value();
+  
+  // Cast to obs_order_movement enum
+  obs_order_movement movement = static_cast<obs_order_movement>(movement_int);
+  
+  obs->setSceneItemOrder(name, movement);
+  return info.Env().Undefined();
+}
+
 Napi::Value ObsGetSourcePos(const Napi::CallbackInfo& info) {
   if (!obs) {
     blog(LOG_ERROR, "ObsGetSourcePos called but obs is not initialized");
@@ -766,6 +823,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
 
   exports.Set("AddSourceToScene", Napi::Function::New(env, ObsAddSourceToScene));
   exports.Set("RemoveSourceFromScene", Napi::Function::New(env, ObsRemoveSourceFromScene));
+  exports.Set("SetSceneItemOrder", Napi::Function::New(env, ObsSetSceneItemOrder));
   exports.Set("GetSourcePos", Napi::Function::New(env, ObsGetSourcePos));
   exports.Set("SetSourcePos", Napi::Function::New(env, ObsSetSourcePos));
 

@@ -187,7 +187,7 @@ interface Noobs {
   SetVideoEncoder(id: string, settings: ObsData): void; // Create the video encoder to use.
 
   // Source management functions.
-  CreateSource(name: string, type: string): string; // Returns the name of the source, which may vary in the event of a name conflict.
+  CreateSource(name: string, type: string, settings?: ObsData): string; // Returns the name of the source, which may vary in the event of a name conflict.
   DeleteSource(name: string): void;
   GetSourceSettings(name: string): ObsData;
   SetSourceSettings(name: string, settings: ObsData): void;
@@ -205,6 +205,7 @@ interface Noobs {
   // Scene management functions.
   AddSourceToScene(sourceName: string): void;
   RemoveSourceFromScene(sourceName: string): void;
+  SetSceneItemOrder(sourceName: string, movement: number): void; // Set the z-order of a scene item (0=up, 1=down, 2=top, 3=bottom).
   GetSourcePos(name: string): SceneItemPosition & SourceDimensions;
   SetSourcePos(name: string, pos: SceneItemPosition): void;
 

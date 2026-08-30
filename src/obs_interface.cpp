@@ -1,12 +1,36 @@
-#include <windows.h>
-#include <obs.h>
-#include "utils.h"
 #include "obs_interface.h"
-#include <vector>
-#include <string>
+
+#include "utils.h"
+
+// OBS/library headers
+#include <cstdarg>
+#include <cstring>
+#include <obs.h>
+#include <obs-audio-controls.h>
+#include <obs-data.h>
 #include <graphics/matrix4.h>
 #include <graphics/vec4.h>
+#include <util/base.h>
 #include <util/platform.h>
+
+// Platform headers
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__linux__)
+#include <X11/X.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#endif
+
+// std
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <filesystem>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
 
 void call_jscb(Napi::Env env, Napi::Function cb, SignalData* sd) {
   Napi::Object obj = Napi::Object::New(env);
@@ -140,7 +164,13 @@ int ObsInterface::reset_video(int fps, int width, int height) {
   ovi.scale_type = OBS_SCALE_BILINEAR;
   ovi.adapter = 0;
   ovi.gpu_conversion = true;
-  ovi.graphics_module = "libobs-d3d11.dll"; 
+#ifdef _WIN32
+  ovi.graphics_module = "libobs-d3d11.dll";
+#elif defined(__linux__)
+  ovi.graphics_module = "libobs-opengl";
+#else
+  #error "Unsupported platform"
+#endif
 
   int rc = obs_reset_video(&ovi);
 
@@ -180,8 +210,15 @@ void ObsInterface::init_obs(const std::string& distPath) {
     basePath += '/';
   }
 
+#ifdef _WIN32
+    std::string pluginPath = basePath + "obs-plugins/win64/";
+#elif defined(__linux__)
+    std::string pluginPath = basePath + "obs-plugins/linux/";
+#else
+    #error "Unsupported platform"
+#endif
+
   std::string effectsPath = basePath + "data/effects/";
-  std::string pluginPath = basePath + "obs-plugins/";
   std::string pluginDataPath = basePath + "data/obs-plugins/";
 
   blog(LOG_INFO, "Base path: %s", basePath.c_str());
@@ -194,7 +231,7 @@ void ObsInterface::init_obs(const std::string& distPath) {
   // libobs but it works for now.
   obs_add_data_path(effectsPath.c_str());
 
-  // This must come before loading modules to initialize D3D11.
+  // This must come before loading modules to initialize D3D11/OpenGL
   // Choose some sensible defaults that can be reconfigured.
   int rc = reset_video(60, 1920, 1080);
 
@@ -208,28 +245,57 @@ void ObsInterface::init_obs(const std::string& distPath) {
     throw std::runtime_error("Failed to reset audio!");
   }
 
+#ifdef _WIN32
   std::vector<std::string> modules = { 
-    "obs-x264",     // Software encoder.
-    "obs-ffmpeg",   // Contains AMF (AMD) encoder support.
-    "win-capture",  // Required for basically all forms of capture on Windows.
-    "image-source", // Required for image sources.
-    "win-wasapi",   // Required for WASAPI audio input.
-    "obs-nvenc",    // Required for NVENC video encoding.
-    "obs-qsv11",    // Required for QSV video encoding.
-    "obs-filters"   // Required for audio filters.
+    "obs-x264",     // Software encoder
+    "obs-ffmpeg",   // Contains AMF (AMD) encoder support
+    "win-capture",  // Required for basically all forms of capture on Windows
+    "image-source", // Required for image sources
+    "win-wasapi",   // Required for WASAPI audio input
+    "obs-nvenc",    // Required for NVENC video encoding
+    "obs-qsv11",    // Required for QSV video encoding
+    "obs-filters"   // Required for audio filters
   };
+#elif defined(__linux__)
+  std::vector<std::string> modules = { 
+    "obs-x264",             // Software encoder
+    "obs-ffmpeg",           // Contains AMF (AMD) encoder support
+    "image-source",         // Required for image sources
+    "linux-pipewire",       // Required for Pipewire window/screen capture
+    "linux-pulseaudio",     // Required for PulseAudio audio input
+    "obs-nvenc",            // Required for NVENC video encoding
+    "obs-qsv11",            // Required for QSV video encoding
+    "obs-filters",          // Required for audio filters
+    "linux-pipewire-audio"  // Required for per-window audio capture: https://github.com/dimtpap/obs-pipewire-audio-capture
+  };
+#else
+    #error "Unsupported platform"
+#endif
 
   for (const auto& module : modules) {
+#ifdef _WIN32
     std::string modulePath = pluginPath + module + ".dll";
+#elif defined(__linux__)
+    std::string modulePath = pluginPath + module + ".so";
+#else
+    #error "Unsupported platform"
+#endif
     std::string moduleDataPath = pluginDataPath + module;
 
     // NVENC fails if there is no NVENC hardware support.
+    // QSV11 is hardlinked to libvpl on linux, so will almost always fail on pure AMD hardware
+#ifdef __linux__
+    bool allowFail = module == "obs-nvenc" || module == "obs-qsv11";
+#else
     bool allowFail = module == "obs-nvenc";
+#endif
     load_module(modulePath.c_str(), moduleDataPath.c_str(), allowFail);
   }
   
   obs_post_load_modules();
+#ifdef _WIN32 // X11/Linux does not require window class registration
   register_preview_window_class();
+#endif
 
   list_encoders();
   list_source_types();
@@ -270,7 +336,8 @@ void ObsInterface::create_output() {
   } else {
     blog(LOG_INFO, "Set ffmpeg_muxer settings");
     // Need to specify the exact path for ffmpeg_muxer. We will write this again at start recording.
-    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
+    std::filesystem::path filepath = std::filesystem::path(recording_path) / (get_current_date_time() + "." + file_extension);
+    std::string filename = filepath.string();
     obs_data_set_string(settings, "path", filename.c_str());
     unbuffered_output_filename = filename;
   }
@@ -407,6 +474,9 @@ void ObsInterface::volmeter_callback(void *data,
   SignalContext* ctx = static_cast<SignalContext*>(data);
   ObsInterface* self = ctx->self;
 
+  if (self->is_shutting_down())
+    return;
+
   if (!self->volmeter_enabled) {
     return;
   }
@@ -415,13 +485,13 @@ void ObsInterface::volmeter_callback(void *data,
   self->jscb.NonBlockingCall(sd, call_jscb);
 }
 
-std::string ObsInterface::createSource(std::string name, std::string type) {
+std::string ObsInterface::createSource(std::string name, std::string type, obs_data_t* settings) {
   blog(LOG_INFO, "Create source: %s of type %s", name.c_str(), type.c_str());
 
   obs_source_t *source = obs_source_create(
     type.c_str(), // Type of source, e.g. "wasapi_input_capture"
     name.c_str(), // Name of the source, e.g. "My Audio Input"
-    NULL, // No settings.
+    settings,
     NULL  // No hotkey data.
   );
 
@@ -611,6 +681,10 @@ obs_properties_t* ObsInterface::getSourceProperties(std::string name) {
 void ObsInterface::output_signal_handler(void *data, calldata_t *cd) {
   SignalContext* ctx = static_cast<SignalContext*>(data);
   ObsInterface* self = ctx->self;
+
+  if (self->is_shutting_down())
+    return;
+
   SignalData* sd;
 
   blog(LOG_INFO, "Handling %s signal from libobs", ctx->id.c_str());
@@ -740,7 +814,10 @@ bool draw_source_outline(obs_scene_t *scene, obs_sceneitem_t *item, void *p) {
 }
 
 void draw_callback(void* data, uint32_t cx, uint32_t cy) {
-  ObsInterface* obsInterface = (ObsInterface*)data;
+  auto* obsInterface = static_cast<ObsInterface*>(data);
+
+  if (obsInterface->is_shutting_down())
+    return;
 
   obs_video_info ovi;
   obs_get_video_info(&ovi);
@@ -771,8 +848,9 @@ void draw_callback(void* data, uint32_t cx, uint32_t cy) {
   // Renders the scene now the graphics context is setup.
   // obs_render_main_texture();
   obs_source_t *source = obs_scene_get_source(obsInterface->scene);
-  if (source)
+  if (source) {
     obs_source_video_render(source);
+  }
 
   // Draw boxes around sources, if enabled.
   if (obsInterface->getDrawSourceOutlineEnabled()) {
@@ -800,10 +878,14 @@ void draw_callback(void* data, uint32_t cx, uint32_t cy) {
   }
 }
 
-void ObsInterface::initPreview(HWND parent) {
+void ObsInterface::initPreview(uintptr_t parent_handle) {
+
   blog(LOG_INFO, "ObsInterface::initPreview");
 
+#ifdef _WIN32
   if (!preview_hwnd) {
+    HWND parent = (HWND)parent_handle;
+
     blog(LOG_INFO, "Creating preview child window");
 
     preview_hwnd = CreateWindowEx(
@@ -836,6 +918,31 @@ void ObsInterface::initPreview(HWND parent) {
     SetWindowLongPtr(preview_hwnd, GWL_EXSTYLE, exStyle);
   }
 
+#elif defined(__linux__)
+  Window parent = (Window)parent_handle;
+
+  if (!preview_window) {
+    x11_display = XOpenDisplay(nullptr);
+
+    preview_window = XCreateSimpleWindow(
+      x11_display,            // Display ID - use default
+      parent,                 // Window ID from electron electron
+      0, 0,                   // Initial position (x, y)
+      1, 1,                   // Initial size (width, height) -- 0 is BadValue in X11
+      0,                      // border width
+      0,                      // border pixel
+      0                       // background pixel
+    );
+
+    if (!preview_window) {
+      blog(LOG_ERROR, "Failed to create preview child window");
+      return;
+    }
+
+    make_window_click_through(x11_display, preview_window);
+  }
+#endif
+
   if (!display) {
     blog(LOG_INFO, "Create OBS display in child window");
 
@@ -846,7 +953,12 @@ void ObsInterface::initPreview(HWND parent) {
     gs_data.format = GS_BGRA;
     gs_data.zsformat = GS_ZS_NONE;
     gs_data.num_backbuffers = 1;
+#ifdef _WIN32
     gs_data.window.hwnd = preview_hwnd;
+#else
+    gs_data.window.id = preview_window;
+    gs_data.window.display = x11_display;
+#endif
 
     display = obs_display_create(&gs_data, 0x0);
 
@@ -864,10 +976,17 @@ void ObsInterface::initPreview(HWND parent) {
 void ObsInterface::configurePreview(int x, int y, int width, int height) {
   blog(LOG_INFO, "ObsInterface::configurePreview");
 
+#ifdef _WIN32
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
     return;
   }
+#elif defined(__linux__)
+  if (!preview_window) {
+    blog(LOG_ERROR, "Preview window not initialized");
+    return;
+  }
+#endif
 
   if (!display) {
     blog(LOG_ERROR, "Preview display not initialized");
@@ -876,14 +995,23 @@ void ObsInterface::configurePreview(int x, int y, int width, int height) {
 
   blog(LOG_INFO, "Moving preview child window to (%d, %d) with size (%d x %d)", x, y, width, height);
 
+  bool success;
+
+#ifdef _WIN32
   // Resize and move the existing child window.
-  bool success = SetWindowPos(
+  success = SetWindowPos(
     preview_hwnd,                  // Handle to the child window
     NULL,                          // No Z-order change
     x, y,                          // New position (x, y)
     width, height,                 // New size (width, height)
     SWP_NOACTIVATE                 // Flags
   );
+#elif defined(__linux__)
+  XMoveResizeWindow(x11_display, preview_window, x, y, width, height);
+  XMapRaised(x11_display, preview_window);
+  XFlush(x11_display);
+  success = true; // X11 is not straightforward about this, but this is unlikely to fail
+#endif
 
   if (!success) {
     blog(LOG_ERROR, "Failed to resize preview window to (%d x %d)", width, height);
@@ -897,27 +1025,57 @@ void ObsInterface::configurePreview(int x, int y, int width, int height) {
 void ObsInterface::showPreview() {
   blog(LOG_INFO, "ObsInterface::showPreview");
 
+#ifdef _WIN32
   if (!preview_hwnd) {
     blog(LOG_ERROR, "Preview window not initialized");
     return;
   }
+#elif defined(__linux__)
+  if (!preview_window) {
+    blog(LOG_ERROR, "Preview window not initialized");
+    return;
+  }
+#endif
 
   if (!display) {
     blog(LOG_ERROR, "Preview display not initialized");
     return;
   }
 
+#ifdef _WIN32
+
   ShowWindow(preview_hwnd, SW_SHOW);
+  blog(LOG_INFO, "Preview child window shown");
+
+#elif defined(__linux__)
+
+  XMapWindow(x11_display, preview_window);
+  XFlush(x11_display);
+  blog(LOG_INFO, "Preview child window shown");
+  
+#endif
   obs_display_set_enabled(display, true);
 }
 
 void ObsInterface::hidePreview() {
   blog(LOG_INFO, "ObsInterface::hidePreview");
+  
+#ifdef _WIN32
 
   if (preview_hwnd) {
     ShowWindow(preview_hwnd, SW_HIDE);
     blog(LOG_INFO, "Preview child window hidden");
   }
+
+#elif defined(__linux__)
+
+  if (preview_window) {
+    XUnmapWindow(x11_display, preview_window);
+    XFlush(x11_display);
+    blog(LOG_INFO, "Preview child window hidden");
+  }
+
+#endif
 }
 
 void ObsInterface::disablePreview() {
@@ -996,21 +1154,112 @@ ObsInterface::ObsInterface(
 ObsInterface::~ObsInterface() {
   blog(LOG_DEBUG, "Shutting down");
 
-  for (auto& kv : volmeters) {
-    obs_volmeter_t* volmeter = kv.second;
-    obs_volmeter_remove_callback(volmeter, volmeter_callback, this);
+  shutting_down.store(true);
+
+  // clean up the display and draw callback
+  if (display) {
+    obs_display_set_enabled(display, false);
+    obs_display_remove_draw_callback(display, draw_callback, this);
+    obs_display_destroy(display);
+    display = nullptr;
+  }
+
+#ifdef __linux__
+  if (x11_display) {
+    XCloseDisplay(x11_display);
+    x11_display = nullptr;
+  }
+#endif
+
+  // cleanup volmeters
+  for (auto& [name, volmeter] : volmeters) {
+    auto it = volmeter_cb_ctx.find(name);
+    SignalContext* ctx = (it != volmeter_cb_ctx.end()) ? it->second : nullptr;
+    if (ctx) {
+      obs_volmeter_remove_callback(volmeter, volmeter_callback, ctx);
+    }
     obs_volmeter_detach_source(volmeter);
     obs_volmeter_destroy(volmeter);
-    blog(LOG_INFO, "Volmeter deleted for source: %s", kv.first.c_str());
-    volmeters.erase(kv.first);
+    if (ctx) {
+      delete ctx;
+    }
+  }
+  volmeters.clear();
+  volmeter_cb_ctx.clear();
+
+  // set clear the output source
+  obs_set_output_source(0, nullptr);
+
+  // disconnect signal handlers before deleting their contexts
+  if (output) {
+    disconnect_signal_handlers(output);
+
+    // try to cleanly stop the output for 2s
+    if (obs_output_active(output)) {
+      blog(LOG_DEBUG, "Stopping output");
+      obs_output_stop(output);
+
+      for (int i = 0; i < 200 && obs_output_active(output); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+
+      // well, we tried ¯\_(ツ)_/¯
+      if (obs_output_active(output)) {
+        blog(LOG_DEBUG, "Output still active, force stopping");
+        obs_output_force_stop(output);
+      }
+    }
+
+    blog(LOG_DEBUG, "Releasing output");
+    obs_output_release(output);
+    output = nullptr;
   }
 
-  for (auto& kv : volmeter_cb_ctx) {
-    SignalContext* ctx = kv.second;
-    delete ctx;
-    volmeter_cb_ctx.erase(kv.first);
+  // cleanup encoders
+  if (video_encoder) {
+    blog(LOG_DEBUG, "Releasing video encoder");
+    obs_encoder_release(video_encoder);
+    video_encoder = nullptr;
+  }
+  for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+    if (audio_encoders[i]) {
+      blog(LOG_DEBUG, "Releasing audio encoder: %d", i);
+      obs_encoder_release(audio_encoders[i]);
+      audio_encoders[i] = nullptr;
+    }
   }
 
+  // cleanup sources
+  for (auto& [name, source] : sources) {
+
+    // cleanup from the scene
+    removeSourceFromScene(name);
+
+    // cleanup source filters
+    if (auto it = filters.find(name); it != filters.end()) {
+      auto& [k, filter] = *it;
+      blog(LOG_INFO, "Beginning filter removal for source: %s on shutdown", name.c_str());
+
+      obs_source_filter_remove(source, filter);
+      obs_source_release(filter);
+      filters.erase(it);
+      blog(LOG_INFO, "Filter removed for source: %s on shutdown", name.c_str());
+    }
+
+    blog(LOG_DEBUG, "Releasing source: %s", name.c_str());
+    obs_source_remove(source);
+    obs_source_release(source);
+  }
+
+  sources.clear();
+  sizes.clear();
+
+  if (scene) {
+    obs_scene_release(scene);
+    scene = nullptr;
+  }
+
+  // delete the signal handlers
   delete starting_ctx;
   delete start_ctx;
   delete stopping_ctx;
@@ -1019,50 +1268,7 @@ ObsInterface::~ObsInterface() {
   delete deactivate_ctx;
   delete converted_ctx;
 
-  for (auto& kv : sources) {
-    std::string name = kv.first;
-    obs_source_t* source = kv.second;
-
-    auto filter_it = filters.find(name);
-
-    if (filter_it != filters.end()) {
-      obs_source_t* filter = filter_it->second;
-      obs_source_filter_remove(source, filter);
-      obs_source_release(filter);
-      filters.erase(name);
-      blog(LOG_INFO, "Filter removed for source: %s on shutdown", name.c_str());
-    }
-
-    blog(LOG_DEBUG, "Releasing source: %s", name.c_str());
-    obs_source_release(source);
-    sources.erase(name);
-  }
-
-  if (scene) {
-    blog(LOG_DEBUG, "Releasing scene");
-    obs_scene_release(scene);
-  }
-
-  if (output) {
-    if (obs_output_active(output)) {
-      blog(LOG_DEBUG, "Force stopping output");
-      obs_output_force_stop(output);
-    }
-      
-    blog(LOG_DEBUG, "Releasing output");
-    obs_output_release(output);
-  }
-
-  // if (video_encoder) {
-  //   blog(LOG_DEBUG, "Releasing video encoder");
-  //   obs_encoder_release(video_encoder);
-  // }
-
-  // if (audio_encoder) {
-  //   blog(LOG_DEBUG, "Releasing audio encoder");
-  //   obs_encoder_release(audio_encoder);
-  // }
-
+  // finally, shut down OBS
   blog(LOG_DEBUG, "Now shutting down OBS");
   obs_shutdown();
 
@@ -1154,7 +1360,8 @@ void ObsInterface::startRecording(int offset) {
     }
   } else {
     obs_data_t *ffmpeg_settings = obs_data_create();
-    std::string filename = recording_path + "\\" + get_current_date_time() + "." + file_extension;
+    std::filesystem::path filepath = std::filesystem::path(recording_path) / (get_current_date_time() + "." + file_extension);
+    std::string filename = filepath.string();
     obs_data_set_string(ffmpeg_settings,  "path", filename.c_str());
     obs_output_update(output, ffmpeg_settings);
     obs_data_release(ffmpeg_settings);
@@ -1279,6 +1486,21 @@ void ObsInterface::removeSourceFromScene(std::string name) {
 
   obs_sceneitem_remove(item);
   blog(LOG_INFO, "ObsInterface::removeSourceFromScene exited");
+}
+
+void ObsInterface::setSceneItemOrder(std::string name, obs_order_movement movement) {
+  blog(LOG_INFO, "ObsInterface::setSceneItemOrder called for source: %s with movement: %d", name.c_str(), movement);
+
+  obs_sceneitem_t *item = obs_scene_find_source(scene, name.c_str());
+  
+  if (!item) {
+    blog(LOG_WARNING, "Did not find scene item for source: %s", name.c_str());
+    return;
+  }
+
+  obs_sceneitem_set_order(item, movement);
+  
+  blog(LOG_INFO, "ObsInterface::setSceneItemOrder exited");
 }
 
 void ObsInterface::getSourcePos(std::string name, vec2* pos, vec2* size, vec2* scale, obs_sceneitem_crop* crop) 

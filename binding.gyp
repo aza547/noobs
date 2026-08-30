@@ -12,12 +12,25 @@
             "<!@(node -p \"require('node-addon-api').include\")",
             "include"
         ],
-        'libraries': [
-            "../bin/64bit/obs.lib",
-        ],
         'dependencies': [
             "<!(node -p \"require('node-addon-api').gyp\")"
         ],
         'defines': [ 'NAPI_DISABLE_CPP_EXCEPTIONS' ],
+        'conditions': [
+            ['OS=="win"', {
+                'libraries': [
+                    "../bin/native/win64/obs.lib",
+                ],
+            }],
+            ['OS=="linux"', {
+                'libraries': [
+                    "-L<(module_root_dir)/bin/native/linux",
+                    "-l:libobs.so.30",
+                ],
+                'ldflags': [
+                    "-Wl,-rpath,'$$ORIGIN/bin/linux'",
+                ],
+            }],
+        ],
     }]
 }
