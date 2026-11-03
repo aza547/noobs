@@ -1562,3 +1562,24 @@ void ObsInterface::setSourceAudioTracks(std::string name, uint32_t tracks)
 
   obs_source_set_audio_mixers(it->second, tracks);
 }
+
+int ObsInterface::getReplayBufferLengthSec()
+{
+  calldata cd;
+  calldata_init(&cd);
+
+  proc_handler_t *ph = obs_output_get_proc_handler(output);
+  bool success = proc_handler_call(ph, "get_duration", &cd);
+
+  if (!success) {
+    blog(LOG_WARNING, "Failed to get replay buffer length");
+    return -1;
+  }
+
+  long long sec = calldata_int(&cd, "seconds");
+  calldata_free(&cd);
+  return static_cast<int>(sec); // Virtually impossible for this to overflow.
+}
+
+
+

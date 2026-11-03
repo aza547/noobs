@@ -161,6 +161,17 @@ Napi::Value ObsSetBuffering(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+Napi::Value ObsGetReplayBufferLengthSec(const Napi::CallbackInfo& info) {
+  if (!obs) {
+    blog(LOG_ERROR, "ObsGetReplayBufferLengthSec called but obs is not initialized");
+    Napi::Error::New(info.Env(), "Obs not initialized").ThrowAsJavaScriptException();
+    return info.Env().Undefined();
+  }
+
+  int length = obs->getReplayBufferLengthSec();
+  return Napi::Number::New(info.Env(), length);
+}
+
 Napi::Value ObsSetFragmentation(const Napi::CallbackInfo& info) {
   blog(LOG_INFO, "ObsSetFragmentation called");
 
@@ -749,6 +760,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("SetVideoEncoder", Napi::Function::New(env, ObsSetVideoEncoder));
 
   exports.Set("SetBuffering", Napi::Function::New(env, ObsSetBuffering));
+  exports.Set("GetReplayBufferLengthSec", Napi::Function::New(env, ObsGetReplayBufferLengthSec));
   exports.Set("SetFragmentation", Napi::Function::New(env, ObsSetFragmentation));
   exports.Set("StartBuffer", Napi::Function::New(env, ObsStartBuffer));
   exports.Set("StartRecording", Napi::Function::New(env, ObsStartRecording));
