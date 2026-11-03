@@ -179,6 +179,8 @@ interface Noobs {
     maxSizeMb: number
   ): void;
 
+  GetReplayBufferLengthSec(): number;
+
   // Use fragmented MP4.
   SetFragmentation(fragmented: boolean): void; 
   StartBuffer(): void;
