@@ -54,7 +54,7 @@ noobs.StopRecording();
 
 ### Buffer Recording
 ```javascript
-noobs.SetBuffering(true);
+noobs.SetBuffering(true, 120, 2048);
 
 noobs.StartBuffering();
 ...

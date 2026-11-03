@@ -143,7 +143,10 @@ Napi::Value ObsSetBuffering(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
   }
 
-  bool valid = info.Length() == 1 && info[0].IsBoolean();
+  bool valid = info.Length() == 3 && 
+    info[0].IsBoolean() &&
+    info[1].IsNumber() &&
+    info[2].IsNumber();
 
   if (!valid) {
     Napi::TypeError::New(info.Env(), "Invalid arguments passed to ObsSetBuffering").ThrowAsJavaScriptException();
@@ -151,8 +154,10 @@ Napi::Value ObsSetBuffering(const Napi::CallbackInfo& info) {
   }
 
   bool buffering = info[0].As<Napi::Boolean>().Value();
-  obs->setBuffering(buffering);
+  int secs = info[1].As<Napi::Number>().Int32Value();
+  int maxSizeMb = info[2].As<Napi::Number>().Int32Value();
 
+  obs->setBuffering(buffering, secs, maxSizeMb);
   return info.Env().Undefined();
 }
 

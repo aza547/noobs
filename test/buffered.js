@@ -35,7 +35,7 @@ async function test() {
   console.log('Recording path:', recordingPath);
 
   noobs.Init(distPath, logPath, cb);
-  noobs.SetBuffering(true);
+  noobs.SetBuffering(true, 55, 500);
   noobs.SetRecordingCfg(recordingPath, 'mp4');
   await new Promise((resolve) => setTimeout(resolve, 1000));
 

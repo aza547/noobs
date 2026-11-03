@@ -262,8 +262,8 @@ void ObsInterface::create_output() {
 
   if (buffering) {
     blog(LOG_INFO, "Set replay buffer settings");
-    obs_data_set_int(settings, "max_time_sec", 60);
-    obs_data_set_int(settings, "max_size_mb", 1024);
+    obs_data_set_int(settings, "max_time_sec", buffer_secs);
+    obs_data_set_int(settings, "max_size_mb", buffer_max_size_mb);
     obs_data_set_string(settings, "directory", recording_path.c_str());
     obs_data_set_string(settings, "format", "%CCYY-%MM-%DD %hh-%mm-%ss");
     obs_data_set_string(settings, "extension", file_extension.c_str());
@@ -1074,13 +1074,19 @@ ObsInterface::~ObsInterface() {
   blog(LOG_DEBUG, "Shutdown complete");
 }
 
-void ObsInterface::setBuffering(bool value) {
+void ObsInterface::setBuffering(bool value, int secs, int maxSizeMb) {
   if (obs_output_active(output)) {
     blog(LOG_ERROR, "Cannot change buffering state while output is active");
     throw new std::runtime_error("Cannot change buffering state while output is active");
   }
 
   buffering = value;
+
+  if (buffering) {
+    buffer_secs = secs;
+    buffer_max_size_mb = maxSizeMb;
+  }
+  
   create_output();
 }
 
