@@ -54,6 +54,7 @@ class ObsInterface {
     std::string getLastRecording(); // Get the last recorded file path.
     void setBuffering(bool buffer, int secs, int maxSizeMb); // Enable or disable buffering.
     int getReplayBufferLengthSec(); // Get the length of the replay buffer.
+    int getReplayBufferSizeMb(); // Get the size of the replay buffer.
     void setFragmentation(bool fragmented); // Enable or disable fragmented MP4.
     void setRecordingCfg(const std::string& recordingPath, const std::string& fileExtension); // Set the recording path.
     void setVideoContext(int fps, int width, int height); // Reset video settings.

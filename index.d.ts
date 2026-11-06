@@ -180,6 +180,7 @@ interface Noobs {
   ): void;
 
   GetReplayBufferLengthSec(): number;
+  GetReplayBufferSizeMb(): number;
 
   // Use fragmented MP4.
   SetFragmentation(fragmented: boolean): void; 

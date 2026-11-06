@@ -1569,7 +1569,7 @@ int ObsInterface::getReplayBufferLengthSec()
   calldata_init(&cd);
 
   proc_handler_t *ph = obs_output_get_proc_handler(output);
-  bool success = proc_handler_call(ph, "get_duration", &cd);
+  bool success = proc_handler_call(ph, "get_buffer_duration_sec", &cd);
 
   if (!success) {
     blog(LOG_WARNING, "Failed to get replay buffer length");
@@ -1579,6 +1579,24 @@ int ObsInterface::getReplayBufferLengthSec()
   long long sec = calldata_int(&cd, "seconds");
   calldata_free(&cd);
   return static_cast<int>(sec); // Virtually impossible for this to overflow.
+}
+
+int ObsInterface::getReplayBufferSizeMb()
+{
+  calldata cd;
+  calldata_init(&cd);
+
+  proc_handler_t *ph = obs_output_get_proc_handler(output);
+  bool success = proc_handler_call(ph, "get_buffer_size_mb", &cd);
+
+  if (!success) {
+    blog(LOG_WARNING, "Failed to get replay buffer size");
+    return -1;
+  }
+
+  long long mb = calldata_int(&cd, "mb");
+  calldata_free(&cd);
+  return static_cast<int>(mb); // Virtually impossible for this to overflow.
 }
 
 
