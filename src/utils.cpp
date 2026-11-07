@@ -1,14 +1,38 @@
-#include <iostream>
-#include <obs.h>
-#include <fstream>
-#include <chrono>
-#include <iomanip>
-#include <sstream>
-#include <mutex>
+// project
 #include "utils.h"
-#include <windows.h>
+
+// vended headers/libraries
+#include <obs.h>
+
+// platform system libs
+#ifdef _WIN32
+  #ifndef NOMINMAX
+    #define NOMINMAX
+  #endif
+  #include <windows.h>
+#elif defined(__linux__)
+#include <X11/Xlib.h>
+#include <X11/extensions/shape.h>
+#endif
+
+// std
+#include <chrono>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iomanip>
+#include <mutex>
+#include <sstream>
 
 void log_handler(int lvl, const char *msg, va_list args, void *p) {
+#ifdef __linux__
+  // Pipewire with cursor capture spams debug messages on every cursor move.
+  if (strstr(msg, "[pipewire] buffer contains corrupted data")) {
+    return;
+  }
+#endif
+
   static std::mutex logMutex;
   static std::stringstream logFileName;
   static bool logInitialized = false;
@@ -24,7 +48,7 @@ void log_handler(int lvl, const char *msg, va_list args, void *p) {
     std::string logDir = static_cast<const char*>(p);
 
     if (!logDir.empty() && logDir.back() != '\\' && logDir.back() != '/') {
-      logDir += '\\';
+      logDir += std::filesystem::path::preferred_separator;
     }
       
     logFileName << logDir << "OBS-" << std::put_time(std::localtime(&t), "%Y-%m-%d") << ".log";
@@ -388,6 +412,7 @@ std::string get_current_date_time() {
     return ss.str();
 }
 
+#ifdef _WIN32
 LRESULT CALLBACK DisplayWndProc(
   _In_ HWND hwnd, 
   _In_ UINT uMsg, 
@@ -401,7 +426,22 @@ LRESULT CALLBACK DisplayWndProc(
 
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
+#elif defined(__linux__)
+void make_window_click_through(Display* display, Window window) {
+    // Create an empty region
+    XRectangle rect;
+    rect.x = 0;
+    rect.y = 0;
+    rect.width = 0;
+    rect.height = 0;
+    
+    // Set the input shape to empty, making the window click-through
+    XShapeCombineRectangles(display, window, ShapeInput, 0, 0, &rect, 0, ShapeSet, 0);
+}
+#endif
 
+
+#ifdef _WIN32
 void register_preview_window_class() {
   WNDCLASSEX klass;
   
@@ -425,3 +465,4 @@ void register_preview_window_class() {
 
   blog(LOG_INFO, "Registered preview window class");
 }
+#endif

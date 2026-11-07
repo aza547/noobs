@@ -40,7 +40,13 @@ async function test() {
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   console.log('Creating source...');
-  noobs.CreateSource('Test Source', 'monitor_capture');
+  if (process.platform === 'win32') {
+    noobs.CreateSource('Test Source', 'monitor_capture');
+  } else {
+    noobs.CreateSource('Test Source', 'pipewire-window-capture-source', {
+      RestoreToken: 'c6f3affd-3db6-44e5-8197-89662d143c71',
+    });
+  }
 
   const settings1 = noobs.GetSourceSettings('Test Source');
   console.log(settings1);

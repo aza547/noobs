@@ -17,7 +17,8 @@
     "index.js",
     "index.d.ts",
     "binding.gyp",
-    "bin/64bit/obs.lib",
+    "bin/native/win64/obs.lib",
+    "bin/native/linux/libobs.so*",
     "src/**/*",
     "include/**/*",
     "dist/**/*"
@@ -26,7 +27,7 @@
   "license": "LGPL-2.0",
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "node-gyp": "^11.2.0",
+    "node-gyp": "^12.1.0",
     "ts-node": "^10.9.2"
   },
   "dependencies": {

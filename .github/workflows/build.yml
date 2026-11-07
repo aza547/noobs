@@ -1,0 +1,70 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: dist/
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: dist/
+
+  package:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download both platform dists
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-windows
+          path: dist-windows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-linux
+          path: dist-linux
+
+      # Merge: start with windows dist, add linux binary
+      - run: |
+          mkdir -p dist
+          cp -r dist-windows/* dist/
+          cp dist-linux/noobs-linux-x64.node dist/
+
+      # Create the publish-ready tarball
+      - run: npm pack
+
+      # Upload the tarball
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noobs-publish-ready
+          path: noobs-*.tgz
