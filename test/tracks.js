@@ -14,7 +14,7 @@ async function test() {
   console.log('Recording path:', recordingPath);
 
   noobs.Init(distPath, logPath, cb);
-  noobs.SetBuffering(true);
+  noobs.SetBuffering(true, 60, 512);
   noobs.SetRecordingCfg(recordingPath, 'mp4');
 
   console.log('Creating source...');

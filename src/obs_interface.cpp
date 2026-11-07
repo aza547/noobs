@@ -328,8 +328,8 @@ void ObsInterface::create_output() {
 
   if (buffering) {
     blog(LOG_INFO, "Set replay buffer settings");
-    obs_data_set_int(settings, "max_time_sec", 60);
-    obs_data_set_int(settings, "max_size_mb", 1024);
+    obs_data_set_int(settings, "max_time_sec", buffer_secs);
+    obs_data_set_int(settings, "max_size_mb", buffer_max_size_mb);
     obs_data_set_string(settings, "directory", recording_path.c_str());
     obs_data_set_string(settings, "format", "%CCYY-%MM-%DD %hh-%mm-%ss");
     obs_data_set_string(settings, "extension", file_extension.c_str());
@@ -1280,13 +1280,19 @@ ObsInterface::~ObsInterface() {
   blog(LOG_DEBUG, "Shutdown complete");
 }
 
-void ObsInterface::setBuffering(bool value) {
+void ObsInterface::setBuffering(bool value, int secs, int maxSizeMb) {
   if (obs_output_active(output)) {
     blog(LOG_ERROR, "Cannot change buffering state while output is active");
     throw new std::runtime_error("Cannot change buffering state while output is active");
   }
 
   buffering = value;
+
+  if (buffering) {
+    buffer_secs = secs;
+    buffer_max_size_mb = maxSizeMb;
+  }
+  
   create_output();
 }
 
@@ -1778,3 +1784,42 @@ void ObsInterface::setSourceAudioTracks(std::string name, uint32_t tracks)
 
   obs_source_set_audio_mixers(it->second, tracks);
 }
+
+int ObsInterface::getReplayBufferLengthSec()
+{
+  calldata cd;
+  calldata_init(&cd);
+
+  proc_handler_t *ph = obs_output_get_proc_handler(output);
+  bool success = proc_handler_call(ph, "get_buffer_duration_sec", &cd);
+
+  if (!success) {
+    blog(LOG_WARNING, "Failed to get replay buffer length");
+    return -1;
+  }
+
+  long long sec = calldata_int(&cd, "seconds");
+  calldata_free(&cd);
+  return static_cast<int>(sec); // Virtually impossible for this to overflow.
+}
+
+int ObsInterface::getReplayBufferSizeMb()
+{
+  calldata cd;
+  calldata_init(&cd);
+
+  proc_handler_t *ph = obs_output_get_proc_handler(output);
+  bool success = proc_handler_call(ph, "get_buffer_size_mb", &cd);
+
+  if (!success) {
+    blog(LOG_WARNING, "Failed to get replay buffer size");
+    return -1;
+  }
+
+  long long mb = calldata_int(&cd, "mb");
+  calldata_free(&cd);
+  return static_cast<int>(mb); // Virtually impossible for this to overflow.
+}
+
+
+

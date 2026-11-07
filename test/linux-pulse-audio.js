@@ -22,7 +22,7 @@ async function stressTestPulseInput() {
 
   // init obs, set up config
   noobs.Init(distPath, logPath, cb);
-  noobs.SetBuffering(true);
+  noobs.SetBuffering(true, 60, 1024);
   noobs.SetRecordingCfg(recordingPath, 'mkv');
   
   const encoders = noobs.ListVideoEncoders();
